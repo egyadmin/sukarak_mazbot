@@ -26,7 +26,7 @@ Preferred communication style: Simple, everyday language.
 ### Backend (`backend/`)
 - **Framework**: FastAPI (Python)
 - **ORM**: SQLAlchemy with declarative base
-- **Database**: SQLite by default (`sukarak.db`), configured via `DATABASE_URL` env var. The backend config at `backend/app/core/config.py` defaults to SQLite with `check_same_thread=False`
+- **Database**: PostgreSQL (Replit-managed via `DATABASE_URL` env var). The backend config at `backend/app/core/config.py` defaults to SQLite but uses PostgreSQL in production via the DATABASE_URL environment variable. All data has been migrated from the original SQLite export to PostgreSQL.
 - **Authentication**: JWT tokens via `python-jose`, bcrypt password hashing (direct bcrypt, not passlib)
 - **API Structure**: All routes under `/api/v1/` with routers for:
   - `/auth` - signup, login, OTP
