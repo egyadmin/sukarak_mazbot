@@ -6,4 +6,5 @@ BACKEND_PID=$!
 
 # Start vite with custom config
 # Use exec to replace shell with vite process, so signals propagate
-exec node_modules/.bin/vite --config vite.custom.config.ts
+# Explicitly pass --host and --port to ensure it's correct
+exec node_modules/.bin/vite --config vite.custom.config.ts --host 0.0.0.0 --port 5000
