@@ -1,0 +1,544 @@
+﻿import React, { useState, useEffect, useCallback } from 'react';
+import {
+    LayoutDashboard, Heart, Users, Calendar, Clock, MapPin,
+    Plus, X, Check, Trash2, Edit3, Search, LogOut, MoreVertical,
+    ToggleLeft, ToggleRight, Activity, DollarSign, ClipboardList,
+    UserPlus, Phone, Mail, ChevronDown, Eye, AlertCircle,
+    Stethoscope, FileText, Settings, Home, User, CheckCircle,
+    XCircle, Star, TrendingUp, ChevronRight, RefreshCw, Save,
+    Shield, Briefcase, UserCheck, Menu
+} from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { API_BASE } from '../api/config';
+
+const API = `${API_BASE}/nursing`;
+
+const statusConfig = {
+    pending: { label: 'قيد الانتظار', color: 'bg-amber-500', text: 'text-amber-500', light: 'bg-amber-500/10', icon: '⏳' },
+    confirmed: { label: 'مؤكد', color: 'bg-blue-500', text: 'text-blue-500', light: 'bg-blue-500/10', icon: '✅' },
+    in_progress: { label: 'جاري', color: 'bg-purple-500', text: 'text-purple-500', light: 'bg-purple-500/10', icon: '🔄' },
+    completed: { label: 'مكتمل', color: 'bg-emerald-500', text: 'text-emerald-500', light: 'bg-emerald-500/10', icon: '✔️' },
+    cancelled: { label: 'ملغي', color: 'bg-red-500', text: 'text-red-500', light: 'bg-red-500/10', icon: '❌' },
+};
+
+const NursingDashboard = () => {
+    const navigate = useNavigate();
+    const [tab, setTab] = useState('overview');
+    const [mobileMenu, setMobileMenu] = useState(false);
+    const [stats, setStats] = useState(null);
+    const [services, setServices] = useState([]);
+    const [bookings, setBookings] = useState([]);
+    const [nurses, setNurses] = useState([]);
+    const [bookingFilter, setBookingFilter] = useState('all');
+    const [expandedBooking, setExpandedBooking] = useState(null);
+    const [toast, setToast] = useState('');
+    const [loading, setLoading] = useState(true);
+
+    const [showServiceModal, setShowServiceModal] = useState(false);
+    const [showNurseModal, setShowNurseModal] = useState(false);
+    const [editingService, setEditingService] = useState(null);
+
+    const [serviceForm, setServiceForm] = useState({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500' });
+    const [nurseForm, setNurseForm] = useState({ name: '', email: '', phone: '', password: '' });
+
+    const nurseUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
+
+    useEffect(() => {
+        const token = localStorage.getItem('admin_token');
+        if (!token) window.location.href = '/admin/login';
+    }, []);
+
+    const showToast = (msg) => { setToast(msg); setTimeout(() => setToast(''), 3000); };
+    const fmt = (iso) => iso ? new Date(iso).toLocaleDateString('ar-EG', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+
+    const load = useCallback(async () => {
+        setLoading(true);
+        try {
+            const [st, sv, bk, nr] = await Promise.all([
+                fetch(`${API}/stats`).then(r => r.json()),
+                fetch(`${API}/services`).then(r => r.json()),
+                fetch(`${API}/bookings`).then(r => r.json()),
+                fetch(`${API}/nurses`).then(r => r.json()),
+            ]);
+            setStats(st);
+            setServices(Array.isArray(sv) ? sv : []);
+            setBookings(Array.isArray(bk) ? bk : []);
+            setNurses(Array.isArray(nr) ? nr : []);
+        } catch (e) { console.error(e); }
+        setLoading(false);
+    }, []);
+
+    useEffect(() => { load(); }, [load]);
+
+    // ── Service CRUD ──
+    const saveService = async () => {
+        const body = { ...serviceForm, price: parseFloat(serviceForm.price) || 0 };
+        if (editingService) {
+            await fetch(`${API}/services/${editingService.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            showToast('تم تحديث الخدمة');
+        } else {
+            await fetch(`${API}/services`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            showToast('تم إضافة الخدمة');
+        }
+        setShowServiceModal(false);
+        setEditingService(null);
+        setServiceForm({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500' });
+        load();
+    };
+
+    const toggleService = async (id) => { await fetch(`${API}/services/${id}/toggle`, { method: 'PUT' }); load(); };
+    const deleteService = async (id) => { if (!window.confirm('هل أنت متأكد من حذف هذه الخدمة؟')) return; await fetch(`${API}/services/${id}`, { method: 'DELETE' }); showToast('تم حذف الخدمة'); load(); };
+
+    const editService = (s) => {
+        setEditingService(s);
+        setServiceForm({ title: s.title, title_en: s.title_en || '', price: s.price || '', duration: s.duration || '', icon: s.icon || '🏥', color: s.color || 'from-teal-500 to-emerald-500' });
+        setShowServiceModal(true);
+    };
+
+    // ── Booking Actions ──
+    const updateBookingStatus = async (id, status, nurse_name) => {
+        await fetch(`${API}/bookings/${id}/status`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status, nurse_name })
+        });
+        showToast(`تم تحديث حالة الحجز إلى: ${statusConfig[status]?.label}`);
+        load();
+    };
+
+    const assignNurse = async (bookingId, nurseName) => {
+        await fetch(`${API}/bookings/${bookingId}/assign`, {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nurse_name: nurseName })
+        });
+        showToast(`تم تعيين الممرض/ة: ${nurseName}`);
+        load();
+    };
+
+    const deleteBooking = async (id) => { if (!window.confirm('هل أنت متأكد؟')) return; await fetch(`${API}/bookings/${id}`, { method: 'DELETE' }); showToast('تم حذف الحجز'); load(); };
+
+    // ── Nurse CRUD ──
+    const addNurse = async () => {
+        if (!nurseForm.name || !nurseForm.email) return;
+        const res = await fetch(`${API}/nurses`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(nurseForm) });
+        if (res.ok) { showToast('تم إضافة الممرض/ة'); setShowNurseModal(false); setNurseForm({ name: '', email: '', phone: '', password: '' }); load(); }
+        else { const e = await res.json(); showToast(e.detail || 'خطأ في الإضافة'); }
+    };
+    const toggleNurse = async (id) => { await fetch(`${API}/nurses/${id}/toggle`, { method: 'PUT' }); load(); };
+    const deleteNurse = async (id) => { if (!window.confirm('هل أنت متأكد؟')) return; await fetch(`${API}/nurses/${id}`, { method: 'DELETE' }); showToast('تم حذف الممرض/ة'); load(); };
+
+    const filteredBookings = bookingFilter === 'all' ? bookings : bookings.filter(b => b.status === bookingFilter);
+    const glass = 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.08] shadow-2xl';
+    const inputStyle = 'w-full bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-white text-sm outline-none focus:border-teal-400/50 transition placeholder:text-white/20';
+
+    const sideItems = [
+        { id: 'overview', label: 'الإحصائيات', icon: LayoutDashboard },
+        { id: 'bookings', label: 'الحجوزات', icon: ClipboardList, badge: bookings.filter(b => b.status === 'pending').length },
+        { id: 'services', label: 'الخدمات', icon: Heart },
+        { id: 'nurses', label: 'الممرضين', icon: UserCheck },
+    ];
+
+    return (
+        <div className="min-h-screen bg-[#0f172a] text-white flex font-cairo" dir="rtl">
+            {/* ══ Toast ══ */}
+            {toast && <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-teal-500 text-white px-8 py-3 rounded-2xl shadow-xl z-[200] font-black animate-pulse">{toast}</div>}
+
+            {/* ══ Sidebar ══ */}
+            <aside className={`fixed lg:sticky top-0 z-50 h-screen w-72 bg-[#0c1322] border-l border-white/[0.06] flex flex-col transition-all ${mobileMenu ? 'right-0' : '-right-80 lg:right-0'}`}>
+                <div className="p-6 border-b border-white/[0.06]">
+                    <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 bg-gradient-to-br from-teal-400 to-emerald-500 rounded-2xl flex items-center justify-center shadow-lg shadow-teal-500/20">
+                            <Heart className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 className="font-black text-base">لوحة التمريض</h2>
+                            <p className="text-[10px] text-white/30 font-bold">{nurseUser?.name || 'مدير التمريض'}</p>
+                        </div>
+                    </div>
+                </div>
+                <nav className="flex-1 p-4 space-y-1">
+                    {sideItems.map(s => (
+                        <button key={s.id} onClick={() => { setTab(s.id); setMobileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition ${tab === s.id ? 'bg-gradient-to-l from-teal-500/20 to-emerald-500/10 text-teal-400 shadow-lg shadow-teal-500/5' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'}`}>
+                            <s.icon className="w-5 h-5" /> {s.label}
+                            {s.badge > 0 && <span className="mr-auto bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{s.badge}</span>}
+                        </button>
+                    ))}
+                </nav>
+                <div className="p-4 border-t border-white/[0.06]">
+                    <button onClick={() => { localStorage.clear(); window.location.href = '/admin/login'; }} className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-red-400/60 hover:text-red-400 hover:bg-red-500/10 transition">
+                        <LogOut className="w-5 h-5" /> تسجيل الخروج
+                    </button>
+                </div>
+            </aside>
+            {mobileMenu && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileMenu(false)} />}
+
+            {/* ══ Main ══ */}
+            <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+                <header className="flex justify-between items-center mb-8">
+                    <div className="flex items-center gap-4">
+                        <button className="lg:hidden p-2 rounded-xl bg-white/[0.05]" onClick={() => setMobileMenu(true)}><Menu className="w-5 h-5" /></button>
+                        <h1 className="text-xl md:text-2xl font-black">{sideItems.find(s => s.id === tab)?.label || 'لوحة التحكم'}</h1>
+                    </div>
+                    <button onClick={load} className="p-3 rounded-xl bg-white/[0.05] hover:bg-white/[0.08] transition"><RefreshCw className="w-5 h-5 text-white/40" /></button>
+                </header>
+
+                {/* ═══════ OVERVIEW ═══════ */}
+                {tab === 'overview' && (
+                    <div className="space-y-8">
+                        {/* Stats Cards */}
+                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                            {[
+                                { label: 'إجمالي الحجوزات', value: stats?.total_bookings || 0, icon: ClipboardList, gradient: 'from-blue-500 to-blue-600' },
+                                { label: 'حجوزات اليوم', value: stats?.today_bookings || 0, icon: Calendar, gradient: 'from-emerald-500 to-teal-600' },
+                                { label: 'إجمالي الإيرادات', value: `${stats?.total_revenue || 0} SAR`, icon: DollarSign, gradient: 'from-teal-500 to-cyan-600' },
+                                { label: 'الخدمات النشطة', value: stats?.active_services || 0, icon: Heart, gradient: 'from-rose-500 to-pink-600' },
+                            ].map((s, i) => (
+                                <div key={i} className={`bg-gradient-to-br ${s.gradient} p-5 rounded-3xl shadow-xl`}>
+                                    <s.icon className="w-7 h-7 opacity-30 mb-3" />
+                                    <p className="text-2xl font-black">{s.value}</p>
+                                    <p className="text-white/60 text-xs font-bold mt-1">{s.label}</p>
+                                </div>
+                            ))}
+                        </div>
+
+                        {/* Quick Overview */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            {/* Recent Bookings */}
+                            <div className={`${glass} rounded-3xl p-6`}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-black">آخر الحجوزات</h3>
+                                    <button onClick={() => setTab('bookings')} className="text-teal-400 text-xs font-bold">عرض الكل ←</button>
+                                </div>
+                                {bookings.length === 0 ? <p className="text-white/20 text-sm text-center py-8">لا توجد حجوزات</p> :
+                                    <div className="space-y-3">
+                                        {bookings.slice(0, 5).map(b => {
+                                            const sc = statusConfig[b.status] || statusConfig.pending;
+                                            return (
+                                                <div key={b.id} className="flex items-center justify-between py-2 border-b border-white/[0.04]">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500/20 to-purple-500/20 flex items-center justify-center text-sm font-black">{b.user_name?.[0] || '?'}</div>
+                                                        <div>
+                                                            <p className="text-sm font-bold">{b.user_name}</p>
+                                                            <p className="text-[10px] text-white/25">{b.service_title} • {b.booking_date}</p>
+                                                        </div>
+                                                    </div>
+                                                    <span className={`${sc.light} ${sc.text} px-2 py-0.5 rounded-lg text-[9px] font-black`}>{sc.label}</span>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                }
+                            </div>
+
+                            {/* Nurses Summary */}
+                            <div className={`${glass} rounded-3xl p-6`}>
+                                <div className="flex justify-between items-center mb-4">
+                                    <h3 className="font-black">فريق التمريض</h3>
+                                    <button onClick={() => setTab('nurses')} className="text-teal-400 text-xs font-bold">إدارة ←</button>
+                                </div>
+                                {nurses.length === 0 ? <p className="text-white/20 text-sm text-center py-8">لم يتم إضافة ممرضين بعد</p> :
+                                    <div className="space-y-3">
+                                        {nurses.map(n => (
+                                            <div key={n.id} className="flex items-center justify-between py-2 border-b border-white/[0.04]">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-teal-500/20 to-emerald-500/20 flex items-center justify-center text-sm font-black text-teal-400">{n.name?.[0]}</div>
+                                                    <div>
+                                                        <p className="text-sm font-bold">{n.name}</p>
+                                                        <p className="text-[10px] text-white/25">{n.email}</p>
+                                                    </div>
+                                                </div>
+                                                <span className={`px-2 py-0.5 rounded-lg text-[9px] font-black ${n.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{n.is_active ? 'نشط' : 'غير نشط'}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                }
+                            </div>
+                        </div>
+
+                        {/* Services Summary */}
+                        <div className={`${glass} rounded-3xl p-6`}>
+                            <div className="flex justify-between items-center mb-4">
+                                <h3 className="font-black">الخدمات المتاحة</h3>
+                                <button onClick={() => setTab('services')} className="text-teal-400 text-xs font-bold">إدارة ←</button>
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                {services.filter(s => s.active).map(s => (
+                                    <div key={s.id} className="bg-white/[0.03] rounded-2xl p-4 text-center">
+                                        <span className="text-2xl">{s.icon || '🏥'}</span>
+                                        <p className="text-sm font-bold mt-2">{s.title}</p>
+                                        <p className="text-xs text-teal-400 font-black">{s.price} SAR</p>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══════ BOOKINGS ═══════ */}
+                {tab === 'bookings' && (
+                    <div className="space-y-6">
+                        {/* Filter Summary */}
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                            {[
+                                { id: 'all', label: 'الكل', count: bookings.length, gradient: 'from-slate-500 to-slate-600' },
+                                { id: 'pending', label: 'قيد الانتظار', count: bookings.filter(b => b.status === 'pending').length, gradient: 'from-amber-500 to-amber-600' },
+                                { id: 'confirmed', label: 'مؤكد', count: bookings.filter(b => b.status === 'confirmed').length, gradient: 'from-blue-500 to-blue-600' },
+                                { id: 'completed', label: 'مكتمل', count: bookings.filter(b => b.status === 'completed').length, gradient: 'from-emerald-500 to-emerald-600' },
+                                { id: 'cancelled', label: 'ملغي', count: bookings.filter(b => b.status === 'cancelled').length, gradient: 'from-red-500 to-red-600' },
+                            ].map(f => (
+                                <button key={f.id} onClick={() => setBookingFilter(f.id)} className={`p-4 rounded-2xl text-xs font-black transition-all ${bookingFilter === f.id ? `bg-gradient-to-br ${f.gradient} shadow-lg scale-[1.02]` : 'bg-white/[0.05] text-white/40 hover:bg-white/[0.08]'}`}>
+                                    <p className={`text-2xl font-black mb-1 ${bookingFilter === f.id ? 'text-white' : 'text-white/60'}`}>{f.count}</p>
+                                    <p>{f.label}</p>
+                                </button>
+                            ))}
+                        </div>
+
+                        {filteredBookings.length === 0 ? (
+                            <div className={`${glass} rounded-3xl p-16 text-center`}>
+                                <ClipboardList className="w-16 h-16 mx-auto opacity-10 mb-4" />
+                                <p className="text-white/30 font-bold text-lg">لا توجد حجوزات</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                {filteredBookings.map(b => {
+                                    const sc = statusConfig[b.status] || statusConfig.pending;
+                                    const isExpanded = expandedBooking === b.id;
+                                    return (
+                                        <div key={b.id} className={`${glass} rounded-3xl overflow-hidden transition-all ${isExpanded ? 'ring-1 ring-white/10' : ''}`}>
+                                            <div className={`h-1 ${sc.color}`} />
+                                            <div className="p-5 cursor-pointer" onClick={() => setExpandedBooking(isExpanded ? null : b.id)}>
+                                                <div className="flex flex-wrap items-center justify-between gap-4">
+                                                    {/* Booking Info */}
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-xl ${sc.light}`}>{sc.icon}</div>
+                                                        <div>
+                                                            <div className="flex items-center gap-2">
+                                                                <p className="font-black">حجز #{b.id}</p>
+                                                                <span className={`${sc.light} ${sc.text} px-2.5 py-0.5 rounded-lg text-[10px] font-black`}>{sc.label}</span>
+                                                            </div>
+                                                            <p className="text-xs text-white/30 mt-1">{fmt(b.created_at)}</p>
+                                                        </div>
+                                                    </div>
+                                                    {/* Customer */}
+                                                    <div className="flex items-center gap-3 bg-white/[0.03] rounded-xl px-4 py-2.5">
+                                                        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center font-black text-sm">{b.user_name?.[0] || '?'}</div>
+                                                        <div>
+                                                            <p className="text-sm font-bold">{b.user_name || 'عميل'}</p>
+                                                            <p className="text-[10px] text-white/25">{b.service_title}</p>
+                                                        </div>
+                                                    </div>
+                                                    {/* Date & Price */}
+                                                    <div className="text-left">
+                                                        <p className="font-black text-teal-400">{b.price || 0} <span className="text-xs text-white/20">SAR</span></p>
+                                                        <p className="text-[10px] text-white/30">{b.booking_date} • {b.booking_time}</p>
+                                                    </div>
+                                                    <ChevronDown className={`w-5 h-5 text-white/20 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                                                </div>
+                                            </div>
+
+                                            {isExpanded && (
+                                                <div className="border-t border-white/[0.06]">
+                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-0">
+                                                        {/* Customer Details */}
+                                                        <div className="p-5">
+                                                            <h4 className="text-xs font-black text-white/30 mb-3 flex items-center gap-2"><User className="w-3.5 h-3.5" /> بيانات العميل</h4>
+                                                            <div className="space-y-2.5">
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">👤</span><span className="font-bold">{b.user_name || '—'}</span></div>
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">📞</span><span className="text-white/50" dir="ltr">{b.user_phone || '—'}</span></div>
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">📍</span><span className="text-white/50">{b.address || 'بدون عنوان'}</span></div>
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">📋</span><span className="text-white/50">{b.notes || 'بدون ملاحظات'}</span></div>
+                                                            </div>
+                                                        </div>
+                                                        {/* Service & Nurse */}
+                                                        <div className="p-5 md:border-r md:border-white/[0.06]">
+                                                            <h4 className="text-xs font-black text-white/30 mb-3 flex items-center gap-2"><Heart className="w-3.5 h-3.5" /> تفاصيل الخدمة</h4>
+                                                            <div className="space-y-2.5">
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">🏥</span><span className="font-bold">{b.service_title}</span></div>
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">📅</span><span className="text-white/50">{b.booking_date} - {b.booking_time}</span></div>
+                                                                <div className="flex items-center gap-2 text-sm"><span className="text-white/20">💰</span><span className="text-teal-400 font-black">{b.price || 0} SAR</span></div>
+                                                                <div className="flex items-center gap-2 text-sm">
+                                                                    <span className="text-white/20">👩‍⚕️</span>
+                                                                    {b.nurse_name ? <span className="font-bold text-emerald-400">{b.nurse_name}</span> : (
+                                                                        <select onChange={e => { if (e.target.value) assignNurse(b.id, e.target.value); }} className="bg-white/[0.05] border border-white/[0.1] rounded-lg px-3 py-1.5 text-xs text-white outline-none">
+                                                                            <option value="">تعيين ممرض/ة</option>
+                                                                            {nurses.filter(n => n.is_active).map(n => <option key={n.id} value={n.name}>{n.name}</option>)}
+                                                                        </select>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    {/* Actions */}
+                                                    <div className="p-5 border-t border-white/[0.06] bg-white/[0.02] flex flex-wrap gap-2">
+                                                        {b.status === 'pending' && <>
+                                                            <button onClick={() => updateBookingStatus(b.id, 'confirmed')} className="bg-gradient-to-l from-blue-500 to-blue-600 px-5 py-2 rounded-xl text-xs font-black shadow-lg">✅ تأكيد الحجز</button>
+                                                            <button onClick={() => updateBookingStatus(b.id, 'cancelled')} className="bg-white/[0.05] px-5 py-2 rounded-xl text-xs font-black text-red-400">❌ رفض</button>
+                                                        </>}
+                                                        {b.status === 'confirmed' && <button onClick={() => updateBookingStatus(b.id, 'in_progress')} className="bg-gradient-to-l from-purple-500 to-purple-600 px-5 py-2 rounded-xl text-xs font-black shadow-lg">🔄 بدء التنفيذ</button>}
+                                                        {b.status === 'in_progress' && <button onClick={() => updateBookingStatus(b.id, 'completed')} className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-2 rounded-xl text-xs font-black shadow-lg">✔️ إنهاء الخدمة</button>}
+                                                        <button onClick={() => deleteBooking(b.id)} className="bg-white/[0.05] px-5 py-2 rounded-xl text-xs font-black text-red-400 mr-auto">🗑 حذف</button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* ═══════ SERVICES ═══════ */}
+                {tab === 'services' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <p className="text-white/30 text-sm">{services.length} خدمة</p>
+                            <button onClick={() => { setEditingService(null); setServiceForm({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500' }); setShowServiceModal(true); }} className="bg-gradient-to-l from-teal-500 to-emerald-600 px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-teal-500/20"><Plus className="w-4 h-4" /> إضافة خدمة</button>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {services.map(s => (
+                                <div key={s.id} className={`${glass} rounded-3xl p-5 ${!s.active ? 'opacity-40' : ''}`}>
+                                    <div className="flex items-start justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-3xl">{s.icon || '🏥'}</span>
+                                            <div>
+                                                <p className="font-black">{s.title}</p>
+                                                {s.title_en && <p className="text-xs text-white/25">{s.title_en}</p>}
+                                            </div>
+                                        </div>
+                                        <div className="flex gap-1">
+                                            <button onClick={() => editService(s)} className="p-2 rounded-lg hover:bg-white/[0.05]"><Edit3 className="w-4 h-4 text-white/30" /></button>
+                                            <button onClick={() => toggleService(s.id)} className="p-2 rounded-lg hover:bg-white/[0.05]">{s.active ? <ToggleRight className="w-5 h-5 text-emerald-400" /> : <ToggleLeft className="w-5 h-5 text-white/20" />}</button>
+                                            <button onClick={() => deleteService(s.id)} className="p-2 rounded-lg hover:bg-white/[0.05]"><Trash2 className="w-4 h-4 text-red-400/50" /></button>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 flex justify-between items-center">
+                                        <span className="text-teal-400 font-black text-lg">{s.price} <span className="text-xs text-white/20">SAR</span></span>
+                                        {s.duration && <span className="text-[10px] text-white/20 bg-white/[0.03] px-2 py-1 rounded-lg">⏱ {s.duration}</span>}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+
+                {/* ═══════ NURSES ═══════ */}
+                {tab === 'nurses' && (
+                    <div className="space-y-6">
+                        <div className="flex justify-between items-center">
+                            <p className="text-white/30 text-sm">{nurses.length} ممرض/ة</p>
+                            <button onClick={() => { setNurseForm({ name: '', email: '', phone: '', password: '' }); setShowNurseModal(true); }} className="bg-gradient-to-l from-teal-500 to-emerald-600 px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-teal-500/20"><UserPlus className="w-4 h-4" /> إضافة ممرض/ة</button>
+                        </div>
+                        {nurses.length === 0 ? (
+                            <div className={`${glass} rounded-3xl p-16 text-center`}>
+                                <Users className="w-16 h-16 mx-auto opacity-10 mb-4" />
+                                <p className="text-white/30 font-bold text-lg">لم يتم إضافة ممرضين بعد</p>
+                                <p className="text-white/15 text-sm mt-2">أضف أول ممرض/ة لفريقك</p>
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {nurses.map(n => (
+                                    <div key={n.id} className={`${glass} rounded-3xl p-5 ${!n.is_active ? 'opacity-40' : ''}`}>
+                                        <div className="flex items-center gap-4 mb-4">
+                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-600 flex items-center justify-center text-xl font-black shadow-lg shadow-teal-500/20">{n.name?.[0]}</div>
+                                            <div className="flex-1">
+                                                <p className="font-black text-base">{n.name}</p>
+                                                <p className="text-xs text-white/30">{n.email}</p>
+                                            </div>
+                                            <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black ${n.is_active ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>{n.is_active ? 'نشط' : 'معلّق'}</span>
+                                        </div>
+                                        {n.phone && <p className="text-xs text-white/25 mb-3" dir="ltr">📞 {n.phone}</p>}
+                                        <div className="flex gap-2">
+                                            <button onClick={() => toggleNurse(n.id)} className={`flex-1 py-2 rounded-xl text-xs font-black ${n.is_active ? 'bg-amber-500/10 text-amber-400' : 'bg-emerald-500/10 text-emerald-400'}`}>{n.is_active ? 'تعليق' : 'تفعيل'}</button>
+                                            <button onClick={() => deleteNurse(n.id)} className="py-2 px-3 rounded-xl text-xs font-black bg-red-500/10 text-red-400">حذف</button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+            </main>
+
+            {/* ══ Service Modal ══ */}
+            {showServiceModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowServiceModal(false)}>
+                    <div className="bg-[#1e293b] rounded-3xl p-6 w-full max-w-lg border border-white/[0.1]" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-lg">{editingService ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}</h3>
+                            <button onClick={() => setShowServiceModal(false)} className="p-2 rounded-xl bg-white/[0.05]"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-white/30 text-[10px] font-black mb-1.5">اسم الخدمة (عربي) *</label>
+                                <input className={inputStyle} value={serviceForm.title} onChange={e => setServiceForm({ ...serviceForm, title: e.target.value })} placeholder="مثل: رعاية منزلية" />
+                            </div>
+                            <div>
+                                <label className="block text-white/30 text-[10px] font-black mb-1.5">اسم الخدمة (إنجليزي)</label>
+                                <input className={inputStyle} value={serviceForm.title_en} onChange={e => setServiceForm({ ...serviceForm, title_en: e.target.value })} placeholder="Home Care" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">السعر (SAR)</label>
+                                    <input type="number" className={inputStyle} value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} placeholder="0" />
+                                </div>
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">المدة</label>
+                                    <input className={inputStyle} value={serviceForm.duration} onChange={e => setServiceForm({ ...serviceForm, duration: e.target.value })} placeholder="ساعة واحدة" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">الأيقونة</label>
+                                    <input className={inputStyle} value={serviceForm.icon} onChange={e => setServiceForm({ ...serviceForm, icon: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">اللون</label>
+                                    <select className={`${inputStyle} bg-[#1e293b]`} value={serviceForm.color} onChange={e => setServiceForm({ ...serviceForm, color: e.target.value })}>
+                                        <option value="from-teal-500 to-emerald-500">أخضر</option>
+                                        <option value="from-blue-500 to-indigo-500">أزرق</option>
+                                        <option value="from-purple-500 to-fuchsia-500">بنفسجي</option>
+                                        <option value="from-rose-500 to-pink-500">وردي</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <button onClick={saveService} className="w-full bg-gradient-to-l from-teal-500 to-emerald-600 py-3 rounded-xl font-black shadow-lg shadow-teal-500/20">{editingService ? 'حفظ التعديلات' : 'إضافة الخدمة'}</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ══ Nurse Modal ══ */}
+            {showNurseModal && (
+                <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowNurseModal(false)}>
+                    <div className="bg-[#1e293b] rounded-3xl p-6 w-full max-w-lg border border-white/[0.1]" onClick={e => e.stopPropagation()}>
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="font-black text-lg">إضافة ممرض/ة جديد</h3>
+                            <button onClick={() => setShowNurseModal(false)} className="p-2 rounded-xl bg-white/[0.05]"><X className="w-5 h-5" /></button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-white/30 text-[10px] font-black mb-1.5">الاسم الكامل *</label>
+                                <input className={inputStyle} value={nurseForm.name} onChange={e => setNurseForm({ ...nurseForm, name: e.target.value })} placeholder="اسم الممرض/ة" />
+                            </div>
+                            <div>
+                                <label className="block text-white/30 text-[10px] font-black mb-1.5">البريد الإلكتروني *</label>
+                                <input className={inputStyle} value={nurseForm.email} onChange={e => setNurseForm({ ...nurseForm, email: e.target.value })} placeholder="nurse@example.com" />
+                            </div>
+                            <div>
+                                <label className="block text-white/30 text-[10px] font-black mb-1.5">رقم الهاتف</label>
+                                <input className={inputStyle} value={nurseForm.phone} onChange={e => setNurseForm({ ...nurseForm, phone: e.target.value })} placeholder="+966..." />
+                            </div>
+                            <div>
+                                <label className="block text-white/30 text-[10px] font-black mb-1.5">كلمة المرور</label>
+                                <input type="password" className={inputStyle} value={nurseForm.password} onChange={e => setNurseForm({ ...nurseForm, password: e.target.value })} placeholder="أدخل كلمة مرور" />
+                            </div>
+                            <button onClick={addNurse} className="w-full bg-gradient-to-l from-teal-500 to-emerald-600 py-3 rounded-xl font-black shadow-lg shadow-teal-500/20">إضافة الممرض/ة</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+};
+
+export default NursingDashboard;
