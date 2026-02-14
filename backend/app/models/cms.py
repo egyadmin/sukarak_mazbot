@@ -37,7 +37,7 @@ class AppSetting(Base):
     key = Column(String(100), unique=True, nullable=False, index=True)
     value = Column(Text, nullable=False)
     label = Column(String(255))  # Display label
-    group = Column(String(50), default="general")  # general, payment, notifications, appearance
+    setting_group = Column("setting_group", String(50), default="general")  # general, payment, notifications, appearance
     type = Column(String(20), default="text")  # text, number, boolean, textarea, color
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
