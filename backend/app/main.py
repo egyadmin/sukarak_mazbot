@@ -15,6 +15,7 @@ from app.api.services import router as services_router
 from app.api.seller import router as seller_router
 from app.api.nursing import router as nursing_router
 from app.api.membership import router as membership_router, seed_membership_data
+from app.db.seed_users import seed_users
 from app.api.payments import router as payments_router
 from app.api.support import router as support_router
 
@@ -32,6 +33,7 @@ from app.db.session import SessionLocal
 _seed_db = SessionLocal()
 try:
     seed_membership_data(_seed_db)
+    seed_users(_seed_db)
 except Exception as e:
     print(f"Seed data info: {e}")
 finally:
