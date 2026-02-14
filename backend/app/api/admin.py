@@ -396,6 +396,7 @@ def add_product(
 # ================================================
 @router.get("/cms/banners")
 def get_banners(db: Session = Depends(get_db)):
+    """Publicly accessible banners"""
     return db.query(Banner).order_by(Banner.sort_order.asc()).all()
 
 @router.post("/cms/banners")
@@ -444,6 +445,7 @@ def delete_banner(banner_id: int, db: Session = Depends(get_db)):
 # ================================================
 @router.get("/cms/notifications")
 def get_notifications(db: Session = Depends(get_db)):
+    """Publicly accessible notifications"""
     return db.query(Notification).order_by(Notification.created_at.desc()).all()
 
 @router.post("/cms/notifications")

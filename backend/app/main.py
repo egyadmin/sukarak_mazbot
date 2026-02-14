@@ -90,7 +90,7 @@ async def api_health():
     return {"status": "ok", "version": "3.0.0"}
 
 # Serve Frontend (after building React) - MUST be LAST
-frontend_path = "../dist/public"
+frontend_path = os.path.join(os.getcwd(), "dist/public")
 if os.path.exists(frontend_path):
     # Mount static assets
     assets_path = os.path.join(frontend_path, "assets")

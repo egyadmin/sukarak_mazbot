@@ -26,8 +26,8 @@ const getBaseUrl = () => {
 };
 
 export const BASE_URL = getBaseUrl();
-export const API_BASE = `${BASE_URL}/api/v1`;
-export const MEDIA_BASE = `${BASE_URL}/media`;
+export const API_BASE = '/api/v1';
+export const MEDIA_BASE = '/media';
 
 console.log('API Configuration Loaded:', {
     origin: window.location.origin,
