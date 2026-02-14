@@ -412,7 +412,7 @@ const AdminDashboard = () => {
             {mobileMenu && <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[1100] lg:hidden" onClick={() => setMobileMenu(false)} />}
 
             {/* Mobile Slide-in Drawer */}
-            <div className={`fixed top-0 right-0 h-full w-[280px] bg-[#1e293b] z-[70] lg:hidden transform transition-transform duration-300 ${mobileMenu ? 'translate-x-0' : 'translate-x-full'}`}>
+            <div className={`fixed top-0 right-0 h-full w-[280px] bg-[#1e293b] z-[1200] lg:hidden transform transition-transform duration-300 ${mobileMenu ? 'translate-x-0' : 'translate-x-full'}`}>
                 <div className="p-5 border-b border-white/[0.06] flex items-center justify-between">
                     <div className="flex items-center gap-3">
                         <img src="/logo.png" alt="" className="w-10 h-10 object-contain" />
