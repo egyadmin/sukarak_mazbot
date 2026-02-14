@@ -49,6 +49,10 @@ const DoctorDashboard = () => {
     const wsRef = useRef(null);
     const localVideoRef = useRef(null);
     const localStreamRef = useRef(null);
+    const remoteVideoRef = useRef(null);
+    const peerConnectionRef = useRef(null);
+    const currentRoomRef = useRef(null);
+    const [remoteConnected, setRemoteConnected] = useState(false);
 
     // Settings state
     const [settingsSection, setSettingsSection] = useState('profile');
@@ -165,9 +169,107 @@ const DoctorDashboard = () => {
         } catch (err) { console.error(err); }
     };
 
+    const createPeerConnection = (roomId) => {
+        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+        const pc = new RTCPeerConnection(config);
+        peerConnectionRef.current = pc;
+
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => {
+                pc.addTrack(track, localStreamRef.current);
+            });
+        }
+
+        pc.ontrack = (event) => {
+            if (remoteVideoRef.current && event.streams[0]) {
+                remoteVideoRef.current.srcObject = event.streams[0];
+                setRemoteConnected(true);
+            }
+        };
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: 'ice_candidate',
+                    room_id: roomId,
+                    data: event.candidate
+                }));
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                setRemoteConnected(false);
+            }
+        };
+
+        return pc;
+    };
+
+    const startWebRTCOffer = async (roomId) => {
+        closePeerConnection();
+        const pc = createPeerConnection(roomId);
+        try {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: 'offer',
+                    room_id: roomId,
+                    data: offer
+                }));
+            }
+        } catch (err) { console.error('WebRTC offer error:', err); }
+    };
+
+    const handleWebRTCOffer = async (msg) => {
+        const roomId = currentRoomRef.current;
+        if (!roomId) return;
+        closePeerConnection();
+        const pc = createPeerConnection(roomId);
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.data));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: 'answer',
+                    room_id: roomId,
+                    data: answer
+                }));
+            }
+        } catch (err) { console.error('WebRTC answer error:', err); }
+    };
+
+    const handleWebRTCAnswer = async (msg) => {
+        try {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'closed') {
+                await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.data));
+            }
+        } catch (err) { console.error('WebRTC set answer error:', err); }
+    };
+
+    const handleICECandidate = async (msg) => {
+        try {
+            if (peerConnectionRef.current && msg.data) {
+                await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(msg.data));
+            }
+        } catch (err) { console.error('ICE candidate error:', err); }
+    };
+
+    const closePeerConnection = () => {
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.close();
+            peerConnectionRef.current = null;
+        }
+        setRemoteConnected(false);
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    };
+
     const connectWebSocket = (roomId) => {
         if (!doctor) return;
-        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_BASE}/chat/ws/${doctor.id}?name=${encodeURIComponent(doctor.name || 'الطبيب')}`;
+        currentRoomRef.current = roomId;
+        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_BASE}/chat/ws/${doctor.id}?name=${encodeURIComponent(doctor.name || 'الطبيب')}&role=doctor`;
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
         ws.onopen = () => {
@@ -199,11 +301,26 @@ const DoctorDashboard = () => {
                     setPatientJoined(true);
                 }
             }
+            if (msg.type === 'room_members') {
+                const others = (msg.members || []).filter(m => String(m.user_id) !== String(doctor.id));
+                if (others.length > 0) {
+                    setPatientJoined(true);
+                    setTimeout(() => startWebRTCOffer(roomId), 1000);
+                }
+            }
             if (msg.type === 'user_joined' && String(msg.user_id) !== String(doctor.id)) {
                 setPatientJoined(true);
+                setTimeout(() => startWebRTCOffer(roomId), 1000);
             }
+            if (msg.type === 'user_left' && String(msg.user_id) !== String(doctor.id)) {
+                setPatientJoined(false);
+                closePeerConnection();
+            }
+            if (msg.type === 'offer') { handleWebRTCOffer(msg); }
+            if (msg.type === 'answer') { handleWebRTCAnswer(msg); }
+            if (msg.type === 'ice_candidate') { handleICECandidate(msg); }
         };
-        ws.onclose = () => { wsRef.current = null; };
+        ws.onclose = () => { wsRef.current = null; closePeerConnection(); };
     };
 
     const startMedia = async () => {
@@ -255,8 +372,10 @@ const DoctorDashboard = () => {
 
     const handleEndConsultation = async () => {
         if (timerRef.current) clearInterval(timerRef.current);
+        closePeerConnection();
         stopMedia();
         if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        currentRoomRef.current = null;
         if (activeConsultation?.id) {
             try { await fetch(`${API_BASE}/health/appointments/${activeConsultation.id}/end-session`, { method: 'PUT' }); } catch { }
         }
@@ -264,6 +383,7 @@ const DoctorDashboard = () => {
         setChatMessages([]);
         setConsultTimer(0);
         setPatientJoined(false);
+        setRemoteConnected(false);
         setChatInput('');
         setActiveTab('sessions');
         if (doctor) loadData(doctor.id);
@@ -290,6 +410,7 @@ const DoctorDashboard = () => {
 
     useEffect(() => {
         return () => {
+            if (peerConnectionRef.current) { peerConnectionRef.current.close(); peerConnectionRef.current = null; }
             if (wsRef.current) wsRef.current.close();
             if (timerRef.current) clearInterval(timerRef.current);
             if (localStreamRef.current) {
@@ -641,24 +762,48 @@ const DoctorDashboard = () => {
                                     </div>
 
                                     <div className="flex flex-col lg:flex-row h-[calc(100vh-320px)] min-h-[400px]">
-                                        {/* Video Preview Panel */}
+                                        {/* Video Panel */}
                                         <div className="relative w-full lg:w-2/5 bg-black/40 flex-shrink-0">
+                                            {/* Remote video (patient) - full size */}
                                             <video
-                                                ref={localVideoRef}
+                                                ref={remoteVideoRef}
                                                 autoPlay
-                                                muted
                                                 playsInline
                                                 className="w-full h-full object-cover"
-                                                style={{ minHeight: '200px' }}
+                                                style={{ minHeight: '200px', display: remoteConnected ? 'block' : 'none' }}
                                             />
-                                            {!camOn && (
-                                                <div className="absolute inset-0 bg-[#0f172a] flex flex-col items-center justify-center gap-3">
-                                                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500/30 to-indigo-500/30 rounded-full flex items-center justify-center">
-                                                        <CameraOff className="w-10 h-10 text-white/30" />
+                                            {/* Fallback when no remote video */}
+                                            {!remoteConnected && (
+                                                <div className="w-full h-full flex flex-col items-center justify-center bg-[#0f172a]" style={{ minHeight: '200px' }}>
+                                                    <div className="w-20 h-20 bg-gradient-to-br from-purple-500/20 to-indigo-500/20 rounded-full flex items-center justify-center mb-3">
+                                                        <User className="w-10 h-10 text-white/20" />
                                                     </div>
-                                                    <p className="text-white/30 text-sm font-bold">الكاميرا مغلقة</p>
+                                                    <p className="text-white/20 text-sm font-bold">
+                                                        {patientJoined ? 'جاري الاتصال بكاميرا المريض...' : 'بانتظار المريض...'}
+                                                    </p>
                                                 </div>
                                             )}
+                                            {remoteConnected && (
+                                                <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                                    <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                                                    {activeConsultation?.patient_name || 'المريض'}
+                                                </div>
+                                            )}
+                                            {/* Local video (doctor) - picture-in-picture */}
+                                            <div className="absolute top-3 left-3 w-32 h-24 rounded-xl overflow-hidden border-2 border-white/20 shadow-xl bg-black/60">
+                                                <video
+                                                    ref={localVideoRef}
+                                                    autoPlay
+                                                    muted
+                                                    playsInline
+                                                    className="w-full h-full object-cover"
+                                                />
+                                                {!camOn && (
+                                                    <div className="absolute inset-0 bg-[#0f172a] flex items-center justify-center">
+                                                        <CameraOff className="w-5 h-5 text-white/30" />
+                                                    </div>
+                                                )}
+                                            </div>
                                             <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                                                 <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
                                                 أنت (د. {doctor?.name})
@@ -670,7 +815,7 @@ const DoctorDashboard = () => {
                                                 </div>
                                             )}
                                             {!micOn && (
-                                                <div className="absolute bottom-3 left-3 bg-red-500/80 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                                <div className="absolute bottom-12 left-3 bg-red-500/80 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
                                                     <MicOff className="w-3 h-3" />
                                                     صامت
                                                 </div>

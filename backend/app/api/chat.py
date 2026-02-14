@@ -21,35 +21,70 @@ class ConnectionManager:
     def __init__(self):
         self.chat_rooms: Dict[str, List[dict]] = {}
         self.active_connections: Dict[str, WebSocket] = {}
-        self.user_names: Dict[str, str] = {}  # {user_id: name}
+        self.user_names: Dict[str, str] = {}
+        self.user_roles: Dict[str, str] = {}
         self.call_sessions: Dict[str, dict] = {}
         self.message_history: Dict[str, List[dict]] = {}
 
-    async def connect(self, websocket: WebSocket, user_id: str, user_name: str):
+    async def connect(self, websocket: WebSocket, user_id: str, user_name: str, role: str = "user"):
         await websocket.accept()
         self.active_connections[user_id] = websocket
         self.user_names[user_id] = user_name
+        self.user_roles[user_id] = role
         await self.broadcast_online_users()
 
-    def disconnect(self, user_id: str, user_name: str = ""):
+    async def disconnect(self, user_id: str, user_name: str = ""):
         self.active_connections.pop(user_id, None)
         self.user_names.pop(user_id, None)
+        self.user_roles.pop(user_id, None)
         for room_id in list(self.chat_rooms.keys()):
+            was_in_room = any(c.get("user_id") == user_id for c in self.chat_rooms[room_id])
             self.chat_rooms[room_id] = [
                 c for c in self.chat_rooms[room_id] if c.get("user_id") != user_id
             ]
+            if was_in_room:
+                for member in self.chat_rooms[room_id]:
+                    ws = self.active_connections.get(member["user_id"])
+                    if ws:
+                        try:
+                            await ws.send_json({
+                                "type": "user_left",
+                                "user_id": user_id,
+                                "name": user_name,
+                                "room_id": room_id,
+                            })
+                        except Exception:
+                            pass
 
-    async def join_room(self, room_id: str, user_id: str, user_name: str):
+    async def join_room(self, room_id: str, user_id: str, user_name: str, role: str = "user"):
         if room_id not in self.chat_rooms:
             self.chat_rooms[room_id] = []
-        self.chat_rooms[room_id].append({"user_id": user_id, "name": user_name})
+        already = any(m["user_id"] == user_id for m in self.chat_rooms[room_id])
+        if not already:
+            self.chat_rooms[room_id].append({"user_id": user_id, "name": user_name, "role": role})
         if room_id not in self.message_history:
             self.message_history[room_id] = []
+        for member in self.chat_rooms[room_id]:
+            if member["user_id"] != user_id:
+                ws = self.active_connections.get(member["user_id"])
+                if ws:
+                    try:
+                        await ws.send_json({
+                            "type": "user_joined",
+                            "user_id": user_id,
+                            "name": user_name,
+                            "role": role,
+                            "room_id": room_id,
+                        })
+                    except Exception:
+                        pass
+
+    def get_room_members(self, room_id: str) -> List[dict]:
+        return self.chat_rooms.get(room_id, [])
 
     async def send_to_room(self, room_id: str, message: dict):
         if room_id in self.message_history:
             self.message_history[room_id].append(message)
-            # Keep only last 200 messages per room
             if len(self.message_history[room_id]) > 200:
                 self.message_history[room_id] = self.message_history[room_id][-200:]
 
@@ -71,8 +106,7 @@ class ConnectionManager:
                 pass
 
     async def broadcast_online_users(self):
-        """Send updated online users list to ALL connected users."""
-        online = [{"user_id": uid, "name": self.user_names.get(uid, uid)} for uid in self.active_connections]
+        online = [{"user_id": uid, "name": self.user_names.get(uid, uid), "role": self.user_roles.get(uid, "user")} for uid in self.active_connections]
         msg = {"type": "online_users", "users": online}
         for uid, ws in list(self.active_connections.items()):
             try:
@@ -89,7 +123,7 @@ class ConnectionManager:
                 pass
 
     def get_online_users(self):
-        return [{"user_id": uid, "name": self.user_names.get(uid, uid)} for uid in self.active_connections]
+        return [{"user_id": uid, "name": self.user_names.get(uid, uid), "role": self.user_roles.get(uid, "user")} for uid in self.active_connections]
 
     def get_room_history(self, room_id: str) -> List[dict]:
         return self.message_history.get(room_id, [])
@@ -102,10 +136,10 @@ manager = ConnectionManager()
 async def websocket_endpoint(websocket: WebSocket, user_id: str):
     """Main WebSocket endpoint for chat and WebRTC signaling."""
     user_name = websocket.query_params.get("name", f"User_{user_id}")
-    await manager.connect(websocket, user_id, user_name)
+    role = websocket.query_params.get("role", "user")
+    await manager.connect(websocket, user_id, user_name, role)
 
     try:
-        # Send online users list
         await websocket.send_json({
             "type": "online_users",
             "users": manager.get_online_users()
@@ -115,7 +149,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
             data = await websocket.receive_json()
             msg_type = data.get("type", "")
 
-            # ===== CHAT MESSAGES =====
             if msg_type == "chat_message":
                 room_id = data.get("room_id", "general")
                 message = {
@@ -123,6 +156,7 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "room_id": room_id,
                     "user_id": user_id,
                     "name": user_name,
+                    "role": role,
                     "text": data.get("text", ""),
                     "timestamp": datetime.utcnow().isoformat(),
                     "id": str(uuid.uuid4())[:8]
@@ -131,20 +165,24 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 
             elif msg_type == "join_room":
                 room_id = data.get("room_id", "general")
-                await manager.join_room(room_id, user_id, user_name)
-                # Send room history
+                await manager.join_room(room_id, user_id, user_name, role)
                 history = manager.get_room_history(room_id)
                 await websocket.send_json({
                     "type": "room_history",
                     "room_id": room_id,
                     "messages": history[-50:]
                 })
+                members = manager.get_room_members(room_id)
+                await websocket.send_json({
+                    "type": "room_members",
+                    "room_id": room_id,
+                    "members": [{"user_id": m["user_id"], "name": m["name"], "role": m.get("role", "user")} for m in members]
+                })
 
-            # ===== WEBRTC SIGNALING =====
             elif msg_type == "call_initiate":
                 target_id = data.get("target_id")
                 session_id = str(uuid.uuid4())[:12]
-                call_type = data.get("call_type", "video")  # video or audio
+                call_type = data.get("call_type", "video")
 
                 manager.call_sessions[session_id] = {
                     "caller_id": user_id,
@@ -155,7 +193,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "created_at": datetime.utcnow().isoformat()
                 }
 
-                # Notify callee
                 await manager.send_to_user(target_id, {
                     "type": "incoming_call",
                     "session_id": session_id,
@@ -164,7 +201,6 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     "call_type": call_type
                 })
 
-                # Confirm to caller
                 await websocket.send_json({
                     "type": "call_ringing",
                     "session_id": session_id,
@@ -203,15 +239,27 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                     })
                     del manager.call_sessions[session_id]
 
-            # WebRTC SDP/ICE exchange
             elif msg_type in ("offer", "answer", "ice_candidate"):
                 target_id = data.get("target_id")
-                await manager.send_to_user(target_id, {
-                    "type": msg_type,
-                    "from_id": user_id,
-                    "session_id": data.get("session_id"),
-                    "data": data.get("data")
-                })
+                if target_id:
+                    await manager.send_to_user(target_id, {
+                        "type": msg_type,
+                        "from_id": user_id,
+                        "session_id": data.get("session_id"),
+                        "data": data.get("data")
+                    })
+                else:
+                    room_id = data.get("room_id")
+                    if room_id and room_id in manager.chat_rooms:
+                        for member in manager.chat_rooms[room_id]:
+                            if member["user_id"] != user_id:
+                                await manager.send_to_user(member["user_id"], {
+                                    "type": msg_type,
+                                    "from_id": user_id,
+                                    "session_id": data.get("session_id"),
+                                    "data": data.get("data"),
+                                    "room_id": room_id,
+                                })
 
             elif msg_type == "get_online_users":
                 await websocket.send_json({
@@ -220,9 +268,9 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
                 })
 
     except WebSocketDisconnect:
-        manager.disconnect(user_id, user_name)
+        await manager.disconnect(user_id, user_name)
         await manager.broadcast_online_users()
     except Exception as e:
-        manager.disconnect(user_id, user_name)
+        await manager.disconnect(user_id, user_name)
         await manager.broadcast_online_users()
         print(f"WebSocket error for {user_id}: {e}")

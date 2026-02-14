@@ -43,6 +43,10 @@ const AppointmentsView = () => {
     const localStreamRef = useRef(null);
     const wsRef = useRef(null);
     const pollRef = useRef(null);
+    const remoteVideoRef = useRef(null);
+    const peerConnectionRef = useRef(null);
+    const currentRoomRef = useRef(null);
+    const [remoteConnected, setRemoteConnected] = useState(false);
 
     const userId = localStorage.getItem('sukarak_user_id') || '1';
     const userName = localStorage.getItem('sukarak_user_name') || 'المستخدم';
@@ -67,7 +71,10 @@ const AppointmentsView = () => {
         fetchDoctors();
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);
+            if (peerConnectionRef.current) { peerConnectionRef.current.close(); peerConnectionRef.current = null; }
             if (wsRef.current) wsRef.current.close();
+            if (timerRef.current) clearInterval(timerRef.current);
+            if (localStreamRef.current) { localStreamRef.current.getTracks().forEach(t => t.stop()); }
         };
     }, []);
 
@@ -161,8 +168,90 @@ const AppointmentsView = () => {
         }
     };
 
+    const createPeerConnection = (roomId) => {
+        const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }] };
+        const pc = new RTCPeerConnection(config);
+        peerConnectionRef.current = pc;
+
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => {
+                pc.addTrack(track, localStreamRef.current);
+            });
+        }
+
+        pc.ontrack = (event) => {
+            if (remoteVideoRef.current && event.streams[0]) {
+                remoteVideoRef.current.srcObject = event.streams[0];
+                setRemoteConnected(true);
+            }
+        };
+
+        pc.onicecandidate = (event) => {
+            if (event.candidate && wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: 'ice_candidate',
+                    room_id: roomId,
+                    data: event.candidate
+                }));
+            }
+        };
+
+        pc.onconnectionstatechange = () => {
+            if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+                setRemoteConnected(false);
+            }
+        };
+
+        return pc;
+    };
+
+    const handleWebRTCOffer = async (msg) => {
+        const roomId = currentRoomRef.current;
+        if (!roomId) return;
+        closePeerConnection();
+        const pc = createPeerConnection(roomId);
+        try {
+            await pc.setRemoteDescription(new RTCSessionDescription(msg.data));
+            const answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            if (wsRef.current?.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({
+                    type: 'answer',
+                    room_id: roomId,
+                    data: answer
+                }));
+            }
+        } catch (err) { console.error('WebRTC answer error:', err); }
+    };
+
+    const handleWebRTCAnswer = async (msg) => {
+        try {
+            if (peerConnectionRef.current && peerConnectionRef.current.signalingState !== 'closed') {
+                await peerConnectionRef.current.setRemoteDescription(new RTCSessionDescription(msg.data));
+            }
+        } catch (err) { console.error('WebRTC set answer error:', err); }
+    };
+
+    const handleICECandidate = async (msg) => {
+        try {
+            if (peerConnectionRef.current && msg.data) {
+                await peerConnectionRef.current.addIceCandidate(new RTCIceCandidate(msg.data));
+            }
+        } catch (err) { console.error('ICE candidate error:', err); }
+    };
+
+    const closePeerConnection = () => {
+        if (peerConnectionRef.current) {
+            peerConnectionRef.current.close();
+            peerConnectionRef.current = null;
+        }
+        setRemoteConnected(false);
+        if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    };
+
     const connectWebSocket = (roomId) => {
-        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_BASE}/chat/ws/${userId}?name=${encodeURIComponent(userName)}`;
+        currentRoomRef.current = roomId;
+        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_BASE}/chat/ws/${userId}?name=${encodeURIComponent(userName)}&role=user`;
         const ws = new WebSocket(wsUrl);
         wsRef.current = ws;
         ws.onopen = () => {
@@ -180,21 +269,37 @@ const AppointmentsView = () => {
                 }]);
             }
             if (msg.type === 'room_history') {
-                setChatMessages(msg.messages.map(m => ({
-                    id: m.timestamp,
-                    from: String(m.user_id) === String(userId) ? 'patient' : 'doctor',
-                    name: m.name,
-                    text: m.text,
-                    time: new Date(m.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
-                })));
+                setChatMessages(prev => {
+                    const history = msg.messages.map(m => ({
+                        id: m.timestamp,
+                        from: String(m.user_id) === String(userId) ? 'patient' : 'doctor',
+                        name: m.name,
+                        text: m.text,
+                        time: new Date(m.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+                    }));
+                    return [...prev.filter(m => m.from === 'system'), ...history];
+                });
+            }
+            if (msg.type === 'room_members') {
+                const others = (msg.members || []).filter(m => String(m.user_id) !== String(userId));
+                if (others.length > 0) {
+                    setDoctorJoined(true);
+                }
             }
             if (msg.type === 'user_joined' && String(msg.user_id) !== String(userId)) {
                 setDoctorJoined(true);
                 setShowDoctorJoinedNotif(true);
                 setTimeout(() => setShowDoctorJoinedNotif(false), 3000);
             }
+            if (msg.type === 'user_left' && String(msg.user_id) !== String(userId)) {
+                setDoctorJoined(false);
+                closePeerConnection();
+            }
+            if (msg.type === 'offer') { handleWebRTCOffer(msg); }
+            if (msg.type === 'answer') { handleWebRTCAnswer(msg); }
+            if (msg.type === 'ice_candidate') { handleICECandidate(msg); }
         };
-        ws.onclose = () => { wsRef.current = null; };
+        ws.onclose = () => { wsRef.current = null; closePeerConnection(); };
     };
 
     const startMedia = async () => {
@@ -237,8 +342,10 @@ const AppointmentsView = () => {
 
     const handleEndConsultation = async () => {
         if (timerRef.current) clearInterval(timerRef.current);
+        closePeerConnection();
         stopMedia();
         if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        currentRoomRef.current = null;
         if (activeConsultation?.id) {
             try { await fetch(`${API_BASE}/health/appointments/${activeConsultation.id}/end-session`, { method: 'PUT' }); } catch { }
         }
@@ -246,6 +353,7 @@ const AppointmentsView = () => {
         setChatMessages([]);
         setConsultTimer(0);
         setDoctorJoined(false);
+        setRemoteConnected(false);
         fetchAppointments();
     };
 
@@ -353,10 +461,37 @@ const AppointmentsView = () => {
                     </div>
 
                     <div className="relative bg-gray-900 rounded-3xl overflow-hidden aspect-video">
-                        <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                        {/* Remote video (doctor) - full size */}
+                        <video ref={remoteVideoRef} autoPlay playsInline className="w-full h-full object-cover" style={{ display: remoteConnected ? 'block' : 'none' }} />
+                        {/* Fallback when no remote video */}
+                        {!remoteConnected && (
+                            <div className="w-full h-full flex flex-col items-center justify-center bg-gray-900">
+                                <div className="w-16 h-16 bg-emerald-500/10 rounded-full flex items-center justify-center mb-3">
+                                    <User className="w-8 h-8 text-emerald-500/30" />
+                                </div>
+                                <p className="text-white/30 text-sm font-bold">
+                                    {doctorJoined ? (lang === 'ar' ? 'جاري الاتصال بكاميرا الطبيب...' : 'Connecting to doctor camera...') : (lang === 'ar' ? 'بانتظار الطبيب...' : 'Waiting for doctor...')}
+                                </p>
+                            </div>
+                        )}
+                        {remoteConnected && (
+                            <div className="absolute bottom-12 left-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+                                {activeConsultation?.doctor_name || (lang === 'ar' ? 'الطبيب' : 'Doctor')}
+                            </div>
+                        )}
+                        {/* Local video (patient) - picture-in-picture */}
+                        <div className="absolute top-3 left-3 w-28 h-20 rounded-xl overflow-hidden border-2 border-white/20 shadow-xl bg-black/60">
+                            <video ref={localVideoRef} autoPlay muted playsInline className="w-full h-full object-cover" />
+                            {!camOn && (
+                                <div className="absolute inset-0 bg-gray-900 flex items-center justify-center">
+                                    <CameraOff className="w-4 h-4 text-white/30" />
+                                </div>
+                            )}
+                        </div>
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-4">
-                            <button onClick={toggleMic} className={`p-3 rounded-full ${micOn ? 'bg-white/20' : 'bg-red-500'}`}><Mic className="w-5 h-5 text-white" /></button>
-                            <button onClick={toggleCam} className={`p-3 rounded-full ${camOn ? 'bg-white/20' : 'bg-red-500'}`}><Camera className="w-5 h-5 text-white" /></button>
+                            <button onClick={toggleMic} data-testid="button-toggle-mic" className={`p-3 rounded-full ${micOn ? 'bg-white/20' : 'bg-red-500'}`}><Mic className="w-5 h-5 text-white" /></button>
+                            <button onClick={toggleCam} data-testid="button-toggle-cam" className={`p-3 rounded-full ${camOn ? 'bg-white/20' : 'bg-red-500'}`}><Camera className="w-5 h-5 text-white" /></button>
                         </div>
                         {doctorJoined && (
                             <div className="absolute top-3 right-3 bg-emerald-500/80 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
@@ -371,7 +506,7 @@ const AppointmentsView = () => {
                             {chatMessages.map(msg => (
                                 <div key={msg.id} className={`flex ${msg.from === 'patient' ? 'justify-end' : msg.from === 'system' ? 'justify-center' : 'justify-start'}`}>
                                     <div className={`p-3 rounded-2xl max-w-[80%] ${msg.from === 'patient' ? 'bg-emerald-500 text-white' : msg.from === 'system' ? 'bg-gray-50 text-gray-400 text-xs' : 'bg-gray-100 text-gray-700'}`}>
-                                        {msg.from === 'doctor' && <p className="text-[10px] text-emerald-600 font-bold mb-0.5">{msg.name || (lang === 'ar' ? 'الطبيب' : 'Doctor')}</p>}
+                                        {msg.from === 'doctor' && <p className="text-[10px] text-emerald-600 font-bold mb-0.5">{msg.name ? `د. ${msg.name}` : (lang === 'ar' ? 'الطبيب' : 'Doctor')}</p>}
                                         <p className="text-sm">{msg.text}</p>
                                     </div>
                                 </div>
