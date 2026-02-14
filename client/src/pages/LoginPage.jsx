@@ -370,15 +370,6 @@ const LoginPage = ({ onLogin }) => {
                                         <div className="w-full flex justify-center rounded-2xl overflow-hidden" style={{ minHeight: 44 }}>
                                             <div id="google-signin-login" className="w-full" />
                                         </div>
-                                        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3">
-                                            <p className="text-[10px] text-yellow-200/70 leading-relaxed text-center">
-                                                {lang === 'ar' 
-                                                  ? 'ملاحظة للمطور: يرجى إضافة رابط الموقع الحالي في Google Cloud Console ضمن (Authorized JavaScript origins) لتفعيل تسجيل الدخول بجوجل.' 
-                                                  : 'Dev Note: Please add this origin to Google Cloud Console (Authorized JavaScript origins) to enable Google Login.'}
-                                                <br/>
-                                                <span className="font-mono text-white/50 break-all">{window.location.origin}</span>
-                                            </p>
-                                        </div>
                                     </div>
                                     {!googleReady && (
                                         <div className="w-full bg-white/[0.06] border border-white/10 text-white/30 py-4 rounded-2xl font-bold text-xs text-center">
