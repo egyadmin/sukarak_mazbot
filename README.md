@@ -61,6 +61,10 @@
 | 👨‍⚕️ **خدمات طبية** | تمريض منزلي وفحوصات |
 | 💰 **محفظة رقمية** | رصيد ونقاط ولاء |
 | 📱 **تطبيق موبايل** | Android & iOS |
+| 👨‍💼 **لوحة تحكم الأدمن** | إدارة شاملة للنظام |
+| 🩺 **لوحة تحكم الطبيب** | إدارة المرضى والمواعيد |
+| 🏪 **لوحة تحكم التاجر** | إدارة المنتجات والطلبات |
+| 👩‍⚕️ **لوحة تحكم التمريض** | إدارة خدمات التمريض المنزلي |
 
 ---
 
@@ -91,12 +95,17 @@ sukarak-mazbot-v3/
 ├── 📁 sukarak_mazbot_v3_backend/          # ⚙️ FastAPI Backend Server
 │   ├── app/
 │   │   ├── api/                           # 🔌 API Endpoints
-│   │   │   ├── admin.py                   #    └─ Admin Dashboard (Users, Orders, Reports)
+│   │   │   ├── admin.py                   #    └─ Admin Dashboard API
 │   │   │   ├── auth.py                    #    └─ Authentication (Email + Google OAuth)
 │   │   │   ├── health.py                  #    └─ Health Profile & Sugar Readings
 │   │   │   ├── ecommerce.py               #    └─ Store, Cart, Orders
+│   │   │   ├── seller.py                  #    └─ Seller Dashboard API
+│   │   │   ├── nursing.py                 #    └─ Nursing Services API
+│   │   │   ├── services.py                #    └─ Medical Services API
 │   │   │   ├── membership.py              #    └─ Memberships & Loyalty Cards
-│   │   │   └── seller.py                  #    └─ Seller Dashboard
+│   │   │   ├── chat.py                    #    └─ Real-time Chat & Communication
+│   │   │   ├── support.py                 #    └─ Customer Support
+│   │   │   └── payments.py                #    └─ Payment Processing
 │   │   ├── core/
 │   │   │   ├── config.py                  #    └─ App Configuration
 │   │   │   └── security.py                #    └─ JWT & bcrypt Security
@@ -115,13 +124,27 @@ sukarak-mazbot-v3/
 │   │   ├── i18n/                          #    └─ Arabic/English Translations
 │   │   ├── pages/                         #    └─ 📄 Application Pages
 │   │   │   ├── LoginPage.jsx              #        └─ Login (Email + Google Sign-In)
-│   │   │   ├── AdminDashboard.jsx         #        └─ Full Admin Panel
+│   │   │   ├── AdminDashboard.jsx         #        └─ 👨‍💼 Full Admin Panel
+│   │   │   ├── DoctorDashboard.jsx        #        └─ 🩺 Doctor Control Panel
+│   │   │   ├── SellerDashboard.jsx        #        └─ 🏪 Seller/Merchant Panel
+│   │   │   ├── NursingDashboard.jsx       #        └─ 👩‍⚕️ Nursing Services Panel
 │   │   │   ├── ProfileView.jsx            #        └─ User Profile & Wallet
 │   │   │   ├── StoreView.jsx              #        └─ E-Commerce Store
 │   │   │   ├── SugarReadingView.jsx       #        └─ Sugar Readings & Charts
 │   │   │   ├── MedicationsView.jsx        #        └─ Medications Management
 │   │   │   ├── InsulinCalculator.jsx      #        └─ Insulin Dose Calculator
-│   │   │   └── ...                        #        └─ Other Feature Pages
+│   │   │   ├── AppointmentsView.jsx       #        └─ Medical Appointments
+│   │   │   ├── MedicalServicesView.jsx    #        └─ Medical Services
+│   │   │   ├── NursingView.jsx            #        └─ Nursing Request Page
+│   │   │   ├── MedicalTestsView.jsx       #        └─ Lab Tests
+│   │   │   ├── FoodsView.jsx              #        └─ Food Guide & Carbs
+│   │   │   ├── HealthTrackingView.jsx     #        └─ Health Tracking
+│   │   │   ├── MembershipCardsView.jsx    #        └─ Membership Cards
+│   │   │   ├── MyOrdersView.jsx           #        └─ Order History
+│   │   │   ├── PersonalAssistantView.jsx  #        └─ AI Assistant
+│   │   │   ├── SportsView.jsx             #        └─ Sports & Exercises
+│   │   │   ├── SupportView.jsx            #        └─ Customer Support Chat
+│   │   │   └── ...                        #        └─ Policy & About Pages
 │   │   ├── utils/ExportUtils.js           #    └─ PDF/Excel Export Utilities
 │   │   └── App.jsx                        #    └─ Root App & Router
 │   ├── android/                           #    └─ 📱 Capacitor Android Project
@@ -170,7 +193,7 @@ sukarak-mazbot-v3/
 - ✅ تحكم الأدمن المباشر في الأرصدة
 - ✅ يبدأ كل حساب جديد بـ 0 (حتى يقرر الأدمن)
 
-### 👨‍💼 لوحة الإدارة | Admin Dashboard
+### 👨‍💼 لوحة تحكم الأدمن | Admin Dashboard
 - ✅ إحصائيات شاملة (مبيعات، طلبات، مستخدمين)
 - ✅ إدارة المستخدمين والأدوار (admin, seller, doctor, nurse, user)
 - ✅ إدارة المنتجات (إضافة / تعديل / حذف)
@@ -181,6 +204,27 @@ sukarak-mazbot-v3/
 - ✅ التقارير (PDF / Excel / طباعة)
 - ✅ محادثات واتصالات مرئية
 - ✅ سجل الأنشطة (Activity Log)
+
+### 🩺 لوحة تحكم الطبيب | Doctor Dashboard
+- ✅ عرض قائمة المرضى المسجلين
+- ✅ متابعة قراءات السكر لكل مريض
+- ✅ إدارة المواعيد والاستشارات
+- ✅ كتابة الملاحظات والتوصيات الطبية
+- ✅ التواصل مع المرضى
+
+### 🏪 لوحة تحكم التاجر | Seller Dashboard
+- ✅ إدارة المنتجات الخاصة بالتاجر
+- ✅ متابعة الطلبات والمبيعات
+- ✅ إحصائيات الأداء والإيرادات
+- ✅ تحديث المخزون والأسعار
+- ✅ إدارة العروض والخصومات
+
+### 👩‍⚕️ لوحة تحكم التمريض | Nursing Dashboard
+- ✅ إدارة طلبات التمريض المنزلي
+- ✅ جدولة الزيارات المنزلية
+- ✅ متابعة حالة المرضى
+- ✅ تسجيل القياسات والملاحظات
+- ✅ التقارير الطبية للزيارات
 
 ### 🌐 دعم اللغات | Internationalization (i18n)
 - ✅ عربي (RTL) / English (LTR)
@@ -342,17 +386,39 @@ npx cap open android
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
+| **Auth** | | |
 | `POST` | `/api/v1/auth/login` | تسجيل الدخول |
 | `POST` | `/api/v1/auth/signup` | إنشاء حساب |
 | `POST` | `/api/v1/auth/google-auth` | دخول بحساب Google |
+| `POST` | `/api/v1/auth/send-otp` | إرسال رمز التحقق |
+| `POST` | `/api/v1/auth/verify-otp` | التحقق من الرمز |
+| **Health** | | |
 | `GET` | `/api/v1/health/profile` | بيانات البروفايل |
 | `PUT` | `/api/v1/health/profile` | تحديث البروفايل |
 | `GET` | `/api/v1/health/sugar-readings` | قراءات السكر |
+| **E-Commerce** | | |
 | `GET` | `/api/v1/ecommerce/products` | المنتجات |
 | `POST` | `/api/v1/ecommerce/orders` | إنشاء طلب |
+| `GET` | `/api/v1/ecommerce/cart` | سلة المشتريات |
+| **Admin** | | |
 | `GET` | `/api/v1/admin/stats` | إحصائيات الأدمن |
 | `GET` | `/api/v1/admin/users` | قائمة المستخدمين |
-| `PUT` | `/api/v1/admin/users/{id}/balance` | تحديث الرصيد |
+| `PUT` | `/api/v1/admin/users/{id}/balance` | تحديث الأرصدة |
+| **Seller** | | |
+| `GET` | `/api/v1/seller/products` | منتجات التاجر |
+| `GET` | `/api/v1/seller/orders` | طلبات التاجر |
+| `GET` | `/api/v1/seller/stats` | إحصائيات التاجر |
+| **Nursing** | | |
+| `GET` | `/api/v1/nursing/requests` | طلبات التمريض |
+| `POST` | `/api/v1/nursing/requests` | طلب تمريض جديد |
+| **Services** | | |
+| `GET` | `/api/v1/services/` | الخدمات الطبية |
+| **Membership** | | |
+| `GET` | `/api/v1/membership/cards` | بطاقات العضوية |
+| **Support** | | |
+| `POST` | `/api/v1/support/tickets` | تذاكر الدعم |
+| **Payments** | | |
+| `POST` | `/api/v1/payments/process` | معالجة المدفوعات |
 
 ---
 
