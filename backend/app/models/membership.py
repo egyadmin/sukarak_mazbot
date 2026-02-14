@@ -39,6 +39,10 @@ class UserMembership(Base):
     currency = Column(String(10), default="SAR")
     payment_method = Column(String(50))
     status = Column(String(20), default="active")  # active, expired, cancelled
+    is_gift = Column(Boolean, default=False)
+    gifted_by = Column(Integer, nullable=True)
+    gift_message = Column(Text, nullable=True)
+    recipient_name = Column(String(255), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

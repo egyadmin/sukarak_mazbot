@@ -383,6 +383,73 @@ def subscribe_to_card(data: dict, db: Session = Depends(get_db)):
     return {"status": "success", "membership_id": membership.id, "message": "تم الاشتراك بنجاح"}
 
 
+@router.get("/cards/search-users")
+def search_users_for_gift(q: str = "", db: Session = Depends(get_db)):
+    """Search users by name or phone for gifting."""
+    from app.models.user import User
+    if not q or len(q) < 2:
+        return []
+    results = db.query(User).filter(
+        (User.name.ilike(f"%{q}%")) | (User.phone.ilike(f"%{q}%"))
+    ).limit(10).all()
+    return [{"id": u.id, "name": u.name, "phone": u.phone, "profile_image": u.profile_image} for u in results]
+
+
+@router.post("/cards/gift")
+def gift_membership_card(data: dict, db: Session = Depends(get_db)):
+    """Gift a membership card to another user."""
+    from datetime import datetime, timedelta
+    gifter_id = data.get("gifter_id", 1)
+    recipient_id = data.get("recipient_id")
+    recipient_name = data.get("recipient_name", "")
+    card_type = data.get("card_type")
+    gift_message = data.get("gift_message", "")
+
+    if not recipient_id or not card_type:
+        raise HTTPException(status_code=400, detail="recipient_id and card_type are required")
+
+    card = db.query(MembershipCard).filter(MembershipCard.card_type == card_type).first()
+    if not card:
+        raise HTTPException(status_code=404, detail="Card not found")
+
+    from app.models.user import User
+    recipient = db.query(User).filter(User.id == recipient_id).first()
+    if not recipient:
+        raise HTTPException(status_code=404, detail="Recipient user not found")
+
+    existing = db.query(UserMembership).filter(
+        UserMembership.user_id == recipient_id,
+        UserMembership.status == "active"
+    ).first()
+    if existing:
+        existing.status = "upgraded"
+
+    now = datetime.now()
+    membership = UserMembership(
+        user_id=recipient_id,
+        card_type=card_type,
+        start_date=now.strftime("%Y-%m-%d"),
+        end_date=(now + timedelta(days=365)).strftime("%Y-%m-%d"),
+        amount_paid=data.get("amount", card.price_sa),
+        currency=data.get("currency", "SAR"),
+        payment_method="gift",
+        status="active",
+        is_gift=True,
+        gifted_by=gifter_id,
+        gift_message=gift_message,
+        recipient_name=recipient_name or recipient.name,
+    )
+    db.add(membership)
+    db.commit()
+    db.refresh(membership)
+    return {
+        "status": "success",
+        "membership_id": membership.id,
+        "message": f"تم إهداء بطاقة {card.name_ar} بنجاح إلى {recipient.name}",
+        "recipient_name": recipient.name,
+    }
+
+
 @router.get("/cards/my-subscription")
 def get_my_subscription(user_id: int = 1, db: Session = Depends(get_db)):
     """Get user's active membership subscription."""
