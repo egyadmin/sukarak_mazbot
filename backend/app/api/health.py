@@ -282,7 +282,16 @@ def approve_session(appt_id: int, db: Session = Depends(get_db)):
     if not appt:
         raise HTTPException(status_code=404, detail="Appointment not found")
     if appt.session_request != "pending":
+        # If it's already approved, just return success with room_id
+        if appt.session_request == "approved":
+            return {
+                "status": "success",
+                "session_request": "approved",
+                "room_id": appt.session_room_id,
+                "patient_name": appt.patient_name,
+            }
         raise HTTPException(status_code=400, detail="Session is not pending")
+    
     appt.session_request = "approved"
     appt.status = "in_progress"
     

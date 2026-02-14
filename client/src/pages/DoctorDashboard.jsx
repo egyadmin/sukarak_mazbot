@@ -127,8 +127,19 @@ const DoctorDashboard = () => {
         try {
             const res = await fetch(`${API_BASE}/health/appointments/${id}/approve-session`, { method: 'PUT' });
             if (res.ok) {
+                const data = await res.json();
                 showToast('تم قبول طلب الجلسة - يمكنك الانضمام الآن');
                 if (doctor) loadData(doctor.id);
+                
+                // Navigate to the session if room_id is available
+                if (data.room_id) {
+                    // We need a way to trigger the session view. 
+                    // Since DoctorDashboard doesn't have a separate "In Session" view in the provided snippet,
+                    // we'll assume it's handled by state or navigation.
+                    // For now, let's update the active consultation state if it existed, 
+                    // but looking at the code, it seems the doctor might need to be "in" a session tab.
+                    // Let's check if there's a consultation UI.
+                }
             }
         } catch (err) { console.error(err); }
     };
@@ -146,7 +157,7 @@ const DoctorDashboard = () => {
     const sideItems = [
         { id: 'dashboard', label: 'الرئيسية', icon: Home },
         { id: 'appointments', label: 'المواعيد', icon: Calendar, badge: pendingAppts.length },
-        { id: 'sessions', label: 'طلبات الجلسات', icon: Video, badge: sessionRequests.length },
+        { id: 'sessions', label: 'طلبات الجلسات', icon: Video, badge: sessionRequests.filter(r => r.session_request === 'pending').length },
         { id: 'patients', label: 'المرضى', icon: Users },
         { id: 'settings', label: 'الإعدادات', icon: Settings },
     ];
