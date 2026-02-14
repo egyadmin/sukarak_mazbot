@@ -40,6 +40,7 @@ import TermsPage from './pages/TermsPage';
 import RefundPolicyPage from './pages/RefundPolicyPage';
 import AboutUsPage from './pages/AboutUsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
+import SessionNotificationOverlay from './components/SessionNotificationOverlay';
 
 function AppContent() {
     const { i18n } = useTranslation();
@@ -163,6 +164,7 @@ function AppContent() {
                     </main>
 
                     {!isPanel && <BottomNav />}
+                    {isLoggedIn && !isPanel && <SessionNotificationOverlay />}
                 </motion.div>
             )}
         </AnimatePresence>

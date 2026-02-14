@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Calendar as CalendarIcon, Clock, Video, Phone, MessageSquare, Plus, X, Check, Loader2, AlertTriangle, PhoneCall, PhoneOff, Mic, MicOff, Camera, CameraOff, Send, User, FileText, Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE } from '../api/config';
@@ -7,6 +8,8 @@ import { API_BASE } from '../api/config';
 const AppointmentsView = () => {
     const { i18n } = useTranslation();
     const lang = i18n.language === 'ar' ? 'ar' : 'en';
+    const routeLocation = useLocation();
+    const navigate = useNavigate();
     const [appointments, setAppointments] = useState([]);
     const [doctors, setDoctors] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -67,6 +70,16 @@ const AppointmentsView = () => {
             if (wsRef.current) wsRef.current.close();
         };
     }, []);
+
+    useEffect(() => {
+        if (routeLocation.state?.startSession) {
+            const sessionData = routeLocation.state.startSession;
+            navigate(routeLocation.pathname, { replace: true, state: {} });
+            setTimeout(() => {
+                startConsultation(sessionData);
+            }, 300);
+        }
+    }, [routeLocation.state]);
 
     const fetchDoctors = () => {
         fetch(`${API_BASE}/health/doctors`)
@@ -129,7 +142,6 @@ const AppointmentsView = () => {
                                 pollRef.current = null;
                                 setWaitingApproval(false);
                                 setSessionRequested(null);
-                                startConsultation({ ...appt, session_room_id: updated.session_room_id });
                             } else if (updated.session_request === 'rejected') {
                                 clearInterval(pollRef.current);
                                 pollRef.current = null;
