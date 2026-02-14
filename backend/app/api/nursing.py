@@ -73,7 +73,9 @@ def get_nursing_stats(db: Session = Depends(get_db)):
     total_nurses = db.query(User).filter(User.role == "nurse").count()
     active_nurses = db.query(User).filter(User.role == "nurse", User.is_active == True).count()
 
-    # Revenue from completed bookings
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_bookings = db.query(NursingBooking).filter(NursingBooking.date == today_str).count()
+
     completed_ids = db.query(NursingBooking.service_id).filter(
         NursingBooking.status.in_(["confirmed", "completed"])
     ).all()
@@ -85,7 +87,9 @@ def get_nursing_stats(db: Session = Depends(get_db)):
 
     return {
         "total_services": total_services,
+        "active_services": total_services,
         "total_bookings": total_bookings,
+        "today_bookings": today_bookings,
         "pending_bookings": pending_bookings,
         "confirmed_bookings": confirmed_bookings,
         "completed_bookings": completed_bookings,
@@ -270,6 +274,24 @@ def assign_nurse(booking_id: int, data: dict, db: Session = Depends(get_db)):
         booking.status = "confirmed"
     db.commit()
     return {"status": "assigned", "nurse_name": booking.nurse_name}
+
+
+@router.put("/bookings/{booking_id}/schedule")
+def update_booking_schedule(booking_id: int, data: dict, db: Session = Depends(get_db)):
+    """Update booking appointment date, time, and optionally assign nurse."""
+    booking = db.query(NursingBooking).filter(NursingBooking.id == booking_id).first()
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if data.get("date"):
+        booking.date = data["date"]
+    if data.get("time"):
+        booking.time = data["time"]
+    if data.get("nurse_name"):
+        booking.nurse_name = data["nurse_name"]
+    if data.get("notes"):
+        booking.notes = data["notes"]
+    db.commit()
+    return {"status": "updated"}
 
 
 @router.delete("/bookings/{booking_id}")
