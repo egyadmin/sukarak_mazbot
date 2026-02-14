@@ -34,7 +34,13 @@ const MarketView = () => {
     const [showCart, setShowCart] = useState(false);
     const [showCheckout, setShowCheckout] = useState(false);
     const [checkoutStep, setCheckoutStep] = useState(1);
-    const [shippingInfo, setShippingInfo] = useState({ name: 'عميل جديد', phone: '0551234567', address: '', city: 'الرياض', notes: '' });
+    const [shippingInfo, setShippingInfo] = useState({
+        name: localStorage.getItem('sukarak_user_name') || '',
+        phone: localStorage.getItem('sukarak_user_phone') || '',
+        address: '',
+        city: 'الرياض',
+        notes: ''
+    });
     const [paymentMethod, setPaymentMethod] = useState('card');
     const [orderSuccess, setOrderSuccess] = useState(null);
     const [placing, setPlacing] = useState(false);
