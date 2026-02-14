@@ -97,6 +97,17 @@ const AdminLogin = ({ onLogin }) => {
 
             {/* === Main Content === */}
             <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
+                {/* Back to Home Button */}
+                <div className="absolute top-8 right-8 z-20">
+                    <button 
+                        onClick={() => window.location.href = '/'}
+                        className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-white/70 hover:text-white transition-all duration-300 backdrop-blur-md group"
+                    >
+                        <ArrowLeft className="w-5 h-5 rotate-180 group-hover:translate-x-1 transition-transform" />
+                        <span className="font-bold text-sm">العودة للرئيسية</span>
+                    </button>
+                </div>
+
                 <div className={`w-full max-w-[440px] transition-all duration-700 ${mounted ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'}`}>
 
                     {/* === Login Card === */}
