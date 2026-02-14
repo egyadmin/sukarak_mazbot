@@ -7,7 +7,7 @@ import {
     Phone, Mail, Globe, MapPin, CreditCard, Truck, Palette,
     Video, PhoneOff, Mic, MicOff, VideoOff, PhoneCall,
     ClipboardList, BarChart3, Shield, UserPlus, Key, Monitor,
-    Activity, FileText, PieChart, Calendar, Hash, UserCheck,
+    Activity, FileText, PieChart, Calendar, Hash, UserCheck, User,
     Download, Printer, FileSpreadsheet, Crown, Headset, MessageSquare, RotateCcw, Check, Clock, CheckCircle, Loader2, XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -65,6 +65,12 @@ const AdminDashboard = () => {
     const [chatInput, setChatInput] = useState('');
     const [chatWs, setChatWs] = useState(null);
     const chatEndRef = useRef(null);
+    const [sessionRequests, setSessionRequests] = useState([]);
+    const [activeSessionRoom, setActiveSessionRoom] = useState(null);
+    const [sessionChatMessages, setSessionChatMessages] = useState([]);
+    const [sessionChatInput, setSessionChatInput] = useState('');
+    const sessionChatEndRef = useRef(null);
+    const sessionWsRef = useRef(null);
     const adminUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
 
     // Redirect doctors to their own dashboard
@@ -112,11 +118,21 @@ const AdminDashboard = () => {
             fetch(`${API_BASE}/membership/cards`).then(r => r.json()).then(d => setMemberships(Array.isArray(d) ? d : [])).catch(() => { });
             fetch(`${API}/package-requests`).then(r => r.json()).then(d => setPackageRequests(Array.isArray(d) ? d : [])).catch(() => { });
             fetch(`${API_BASE}/support/admin/tickets`).then(r => r.json()).then(d => setSupportTickets(Array.isArray(d) ? d : [])).catch(() => { });
+            fetch(`${API_BASE}/health/session-requests`).then(r => r.json()).then(d => setSessionRequests(Array.isArray(d) ? d : [])).catch(() => { });
         } catch (e) { console.error(e); }
     };
 
     useEffect(() => { load(); }, []);
     useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
+    useEffect(() => { sessionChatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [sessionChatMessages]);
+    useEffect(() => {
+        if (tab === 'chat') {
+            const interval = setInterval(() => {
+                fetch(`${API_BASE}/health/session-requests`).then(r => r.json()).then(d => setSessionRequests(Array.isArray(d) ? d : [])).catch(() => { });
+            }, 5000);
+            return () => clearInterval(interval);
+        }
+    }, [tab]);
 
     // === USER CRUD ===
     const toggleUser = async (id) => {
@@ -286,6 +302,56 @@ const AdminDashboard = () => {
         };
         return () => { ws.close(); };
     }, []);
+
+    const approveSession = async (apptId) => {
+        try {
+            const res = await fetch(`${API_BASE}/health/appointments/${apptId}/approve-session`, { method: 'PUT' });
+            const data = await res.json();
+            if (data.status === 'success') {
+                setSessionRequests(prev => prev.filter(r => r.id !== apptId));
+                joinSessionRoom(data.room_id, data.patient_name);
+            }
+        } catch (err) { console.error(err); }
+    };
+
+    const rejectSession = async (apptId) => {
+        try {
+            await fetch(`${API_BASE}/health/appointments/${apptId}/reject-session`, { method: 'PUT' });
+            setSessionRequests(prev => prev.filter(r => r.id !== apptId));
+        } catch (err) { console.error(err); }
+    };
+
+    const joinSessionRoom = (roomId, patientName) => {
+        setActiveSessionRoom({ room_id: roomId, patient_name: patientName });
+        setSessionChatMessages([{ from: 'system', text: `بدأت جلسة مع ${patientName || 'المريض'}`, time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }]);
+        const uid = adminUser?.id || '1';
+        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_BASE}/chat/ws/${uid}?name=${encodeURIComponent(adminUser?.name || 'الطبيب')}`;
+        const ws = new WebSocket(wsUrl);
+        sessionWsRef.current = ws;
+        ws.onopen = () => { ws.send(JSON.stringify({ type: 'join_room', room_id: roomId })); };
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'chat_message') {
+                setSessionChatMessages(prev => [...prev, { from: String(msg.user_id) === String(uid) ? 'admin' : 'patient', name: msg.name, text: msg.text, time: new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }]);
+            }
+            if (msg.type === 'room_history') {
+                setSessionChatMessages(msg.messages.map(m => ({ from: String(m.user_id) === String(uid) ? 'admin' : 'patient', name: m.name, text: m.text, time: new Date(m.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) })));
+            }
+        };
+        ws.onclose = () => { sessionWsRef.current = null; };
+    };
+
+    const sendSessionChat = () => {
+        if (!sessionChatInput.trim() || !sessionWsRef.current || !activeSessionRoom) return;
+        sessionWsRef.current.send(JSON.stringify({ type: 'chat_message', room_id: activeSessionRoom.room_id, text: sessionChatInput }));
+        setSessionChatInput('');
+    };
+
+    const endSessionRoom = () => {
+        if (sessionWsRef.current) { sessionWsRef.current.close(); sessionWsRef.current = null; }
+        setActiveSessionRoom(null);
+        setSessionChatMessages([]);
+    };
 
     const sendChat = () => {
         if (!chatInput.trim() || !wsRef.current) return;
@@ -1812,11 +1878,79 @@ const AdminDashboard = () => {
                                     </div>
                                 </div>
 
+                                {/* Session Requests Panel */}
+                                {sessionRequests.length > 0 && (
+                                    <div className={`${glass} rounded-2xl p-4 border border-amber-500/20`}>
+                                        <div className="flex items-center gap-2 mb-3">
+                                            <Bell className="w-4 h-4 text-amber-400 animate-bounce" />
+                                            <h4 className="text-white font-black text-sm">طلبات جلسات ({sessionRequests.length})</h4>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {sessionRequests.map(req => (
+                                                <div key={req.id} className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-center justify-between gap-3" data-testid={`session-request-${req.id}`}>
+                                                    <div className="flex items-center gap-3 flex-1 min-w-0">
+                                                        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center flex-shrink-0">
+                                                            <User className="w-5 h-5 text-amber-400" />
+                                                        </div>
+                                                        <div className="min-w-0">
+                                                            <p className="text-white font-bold text-sm truncate">{req.patient_name}</p>
+                                                            <p className="text-white/30 text-[10px]">{req.appointment_type === 'video' ? 'فيديو' : req.appointment_type === 'audio' ? 'صوتي' : 'محادثة'} - {req.duration_minutes} دقيقة</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 flex-shrink-0">
+                                                        <button onClick={() => approveSession(req.id)} className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-bold text-xs flex items-center gap-1.5" data-testid={`button-approve-session-${req.id}`}>
+                                                            <Check className="w-3.5 h-3.5" /> قبول
+                                                        </button>
+                                                        <button onClick={() => rejectSession(req.id)} className="px-4 py-2 bg-red-500/20 text-red-400 rounded-xl font-bold text-xs flex items-center gap-1.5" data-testid={`button-reject-session-${req.id}`}>
+                                                            <X className="w-3.5 h-3.5" /> رفض
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Active Session Chat Room */}
+                                {activeSessionRoom && (
+                                    <div className={`${glass} rounded-2xl overflow-hidden flex flex-col border border-emerald-500/30`} style={{ height: '50vh' }}>
+                                        <div className="px-6 py-4 border-b border-white/[0.06] flex items-center justify-between">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
+                                                <h3 className="text-base font-black text-white">جلسة مع {activeSessionRoom.patient_name || 'المريض'}</h3>
+                                            </div>
+                                            <button onClick={endSessionRoom} className="px-4 py-2 bg-red-500/20 text-red-400 rounded-xl font-bold text-xs flex items-center gap-1.5" data-testid="button-end-session-room">
+                                                <PhoneOff className="w-3.5 h-3.5" /> إنهاء
+                                            </button>
+                                        </div>
+                                        <div className="flex-1 overflow-y-auto p-6 space-y-3">
+                                            {sessionChatMessages.map((m, i) => (
+                                                <div key={i} className={`flex ${m.from === 'admin' ? 'justify-start' : m.from === 'system' ? 'justify-center' : 'justify-end'}`}>
+                                                    <div className={`max-w-[70%] ${m.from === 'admin' ? 'bg-emerald-500/15 border-emerald-500/20' : m.from === 'system' ? 'bg-white/5 text-white/30 text-xs' : 'bg-blue-500/15 border-blue-500/20'} border rounded-2xl px-4 py-3`}>
+                                                        {m.name && m.from !== 'system' && <p className="text-[10px] text-white/30 font-bold mb-1">{m.name} - {m.time}</p>}
+                                                        <p className="text-white text-sm font-bold">{m.text}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                            <div ref={sessionChatEndRef} />
+                                        </div>
+                                        <div className="p-4 border-t border-white/[0.06]">
+                                            <div className="flex gap-3">
+                                                <input value={sessionChatInput} onChange={e => setSessionChatInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && sendSessionChat()}
+                                                    placeholder="اكتب رسالتك للمريض..." className={`${inputStyle} flex-1`} data-testid="input-session-chat" />
+                                                <button onClick={sendSessionChat} className="px-5 bg-gradient-to-l from-emerald-500 to-teal-600 text-white rounded-xl font-bold text-sm flex items-center gap-2 shadow-lg shadow-emerald-900/20" data-testid="button-send-session-chat">
+                                                    <Send className="w-4 h-4" /> إرسال
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Chat Room */}
                                 <div className={`${glass} rounded-2xl overflow-hidden flex flex-col`} style={{ height: inCall ? '40vh' : 'calc(100vh - 340px)' }}>
                                     <div className="px-6 py-4 border-b border-white/[0.06] flex items-center gap-3">
                                         <div className="w-3 h-3 rounded-full bg-emerald-400 animate-pulse" />
-                                        <h3 className="text-base font-black text-white">💬 غرفة المحادثات</h3>
+                                        <h3 className="text-base font-black text-white">غرفة المحادثات العامة</h3>
                                         <span className="text-white/20 text-xs font-bold">WebSocket • متصل</span>
                                     </div>
                                     <div className="flex-1 overflow-y-auto p-6 space-y-4">

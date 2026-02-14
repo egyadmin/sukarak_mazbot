@@ -194,6 +194,8 @@ def get_appointments(db: Session = Depends(get_db)):
         "scheduled_at": a.scheduled_at.isoformat() if a.scheduled_at else None,
         "notes": a.notes,
         "duration_minutes": a.duration_minutes,
+        "session_request": a.session_request or "none",
+        "session_room_id": a.session_room_id,
     } for a in appts]
 
 
@@ -221,6 +223,96 @@ def cancel_appointment(appt_id: int, db: Session = Depends(get_db)):
     if not appt:
         raise HTTPException(status_code=404, detail="Appointment not found")
     appt.status = "cancelled"
+    db.commit()
+    return {"status": "success"}
+
+
+@router.put("/appointments/{appt_id}/request-session")
+def request_session(appt_id: int, db: Session = Depends(get_db)):
+    """Patient requests to start a session - sends notification to medical team."""
+    import uuid
+    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    if appt.session_request in ("pending", "approved"):
+        return {
+            "status": "success",
+            "session_request": appt.session_request,
+            "room_id": appt.session_room_id,
+            "message": "طلب الجلسة موجود بالفعل"
+        }
+    room_id = f"session_{appt_id}_{uuid.uuid4().hex[:8]}"
+    appt.session_request = "pending"
+    appt.session_room_id = room_id
+    db.commit()
+    db.refresh(appt)
+    return {
+        "status": "success",
+        "session_request": "pending",
+        "room_id": room_id,
+        "message": "تم إرسال طلب الجلسة للفريق الطبي"
+    }
+
+
+@router.get("/session-requests")
+def get_session_requests(db: Session = Depends(get_db)):
+    """Get all pending session requests for admin/medical team."""
+    appts = db.query(Appointment).filter(
+        Appointment.session_request == "pending"
+    ).order_by(Appointment.created_at.desc()).all()
+    return [{
+        "id": a.id,
+        "patient_id": a.patient_id,
+        "patient_name": a.patient_name or "مريض",
+        "doctor_name": a.doctor_name or "الفريق الطبي",
+        "appointment_type": a.appointment_type,
+        "scheduled_at": a.scheduled_at.isoformat() if a.scheduled_at else None,
+        "notes": a.notes,
+        "duration_minutes": a.duration_minutes,
+        "session_request": a.session_request,
+        "session_room_id": a.session_room_id,
+        "created_at": a.created_at.isoformat() if a.created_at else None,
+    } for a in appts]
+
+
+@router.put("/appointments/{appt_id}/approve-session")
+def approve_session(appt_id: int, db: Session = Depends(get_db)):
+    """Admin/doctor approves a session request."""
+    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    if appt.session_request != "pending":
+        raise HTTPException(status_code=400, detail="Session is not pending")
+    appt.session_request = "approved"
+    appt.status = "in_progress"
+    db.commit()
+    return {
+        "status": "success",
+        "session_request": "approved",
+        "room_id": appt.session_room_id,
+        "patient_name": appt.patient_name,
+    }
+
+
+@router.put("/appointments/{appt_id}/reject-session")
+def reject_session(appt_id: int, db: Session = Depends(get_db)):
+    """Admin/doctor rejects a session request."""
+    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    appt.session_request = "rejected"
+    db.commit()
+    return {"status": "success", "session_request": "rejected"}
+
+
+@router.put("/appointments/{appt_id}/end-session")
+def end_session(appt_id: int, db: Session = Depends(get_db)):
+    """End an active session."""
+    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+    appt.session_request = "none"
+    appt.status = "completed"
     db.commit()
     return {"status": "success"}
 

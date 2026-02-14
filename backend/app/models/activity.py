@@ -48,4 +48,6 @@ class Appointment(Base):
     scheduled_at = Column(DateTime(timezone=True), nullable=False)
     notes = Column(Text)
     duration_minutes = Column(Integer, default=30)
+    session_request = Column(String(20), default="none")  # none, pending, approved, rejected
+    session_room_id = Column(String(100), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
