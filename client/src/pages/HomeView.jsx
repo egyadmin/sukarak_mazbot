@@ -167,7 +167,9 @@ const HomeView = () => {
                         >
                             <img src={banners[currentBanner]?.image_url} alt={banners[currentBanner]?.title || ''}
                                 className="w-full h-full object-cover"
-                                onError={e => { e.target.src = '/logo.png'; e.target.className = 'w-16 h-16 object-contain mx-auto mt-14'; }} />
+                                onError={e => { 
+                                    e.target.src = `https://images.unsplash.com/photo-1505751172107-573225a91200?w=800&q=80`; 
+                                }} />
                         </motion.div>
                     </AnimatePresence>
                 </motion.div>

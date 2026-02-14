@@ -61,7 +61,10 @@ app.add_middleware(
 )
 
 # Mount media
-app.mount("/media", StaticFiles(directory="media"), name="media")
+import os
+_media_dir = os.path.join(os.getcwd(), "media")
+os.makedirs(_media_dir, exist_ok=True)
+app.mount("/media", StaticFiles(directory=_media_dir), name="media")
 
 # Mount uploads (licenses, etc.)
 import os as _os
