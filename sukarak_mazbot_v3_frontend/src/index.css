@@ -1,0 +1,226 @@
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@200..1000&family=Zain:wght@200;300;400;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Cairo', sans-serif;
+  background-color: #f5fffc;
+  --color-primary: #166f50;
+  --color-primary-dark: #0d4a35;
+  --color-accent: #00d4aa;
+  --color-gold: #fbbf24;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+
+.glass-dark {
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Premium card hover */
+.premium-card {
+  background: white;
+  border-radius: 1.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.04);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 6px 16px rgba(0, 0, 0, 0.02);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.premium-card:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.06), 0 12px 28px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
+}
+
+.premium-card:active {
+  transform: scale(0.98);
+}
+
+/* Animated gradient bg */
+.animated-gradient {
+  background: linear-gradient(-45deg, #0d4a35, #166f50, #00d4aa, #10b981);
+  background-size: 400% 400%;
+  animation: gradientShift 8s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Pulse ring animation */
+@keyframes pulseRing {
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.pulse-ring::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  animation: pulseRing 1.5s ease-out infinite;
+}
+
+/* Float animation */
+@keyframes float {
+
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+.float-anim {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Shimmer loader */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.shimmer-loader {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(90deg, #f0fdf4 0%, #ecfdf5 50%, #f0fdf4 100%);
+}
+
+.shimmer-loader::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.6), transparent);
+  animation: shimmer 1.5s infinite;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #166f50;
+}
+
+/* Hide scrollbar but keep scroll */
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* RTL Support */
+[dir="rtl"] {
+  text-align: right;
+}
+
+[dir="ltr"] {
+  text-align: left;
+}
+
+/* Mini Chart Styles */
+.sugar-chart-bar {
+  transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 6px 6px 2px 2px;
+}
+
+/* Notification badge bounce */
+@keyframes badgeBounce {
+
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.15);
+  }
+}
+
+.badge-bounce {
+  animation: badgeBounce 2s ease-in-out infinite;
+}
+
+/* Dark theme select/dropdown fix */
+.bg-\[\\#0f172a\] select,
+.bg-\[\\#1e293b\] select,
+[class*="bg-white/[0.06]"] select {
+  background-color: #1e293b;
+  color: #ffffff;
+  color-scheme: dark;
+}
+
+.bg-\[\\#0f172a\] select option,
+.bg-\[\\#1e293b\] select option,
+[class*="bg-white/[0.06]"] select option {
+  background-color: #1e293b;
+  color: #ffffff;
+  padding: 8px 12px;
+}
+
+select.bg-\[\\#1e293b\] {
+  color-scheme: dark;
+}
+
+select.bg-\[\\#1e293b\] option {
+  background-color: #1e293b;
+  color: #ffffff;
+}

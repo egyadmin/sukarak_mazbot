@@ -1,0 +1,114 @@
+# ========================================
+# Sukarak Mazbot V3 - .gitignore
+# ========================================
+
+# === Dependencies ===
+node_modules/
+bower_components/
+jspm_packages/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+.eggs/
+
+# === Virtual Environments ===
+venv/
+venv_new/
+.venv/
+env/
+ENV/
+
+# === Environment Variables ===
+.env
+.env.*
+!.env.example
+
+# === Build Output ===
+dist/
+build/
+*.build/
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# === OS Files ===
+Thumbs.db
+Desktop.ini
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# === Logs ===
+*.log
+npm-debug.log*
+yarn-debug.log*
+pids/
+logs/
+
+# === Database ===
+*.db
+*.sqlite3
+*.sql
+
+# === Media / Uploads ===
+media/profiles/
+media/products/
+media/banners/
+uploads/
+
+# === Temporary / Debug Scripts ===
+check_*.py
+fix_*.py
+add_*.py
+audit_*.py
+full_*.py
+extract_*.py
+*_output.txt
+*_result.txt
+corrupted_lines.txt
+
+# === Binary / Large Files ===
+*.docx
+*.xlsx
+*.zip
+*.rar
+*.mp4
+*.avi
+*.mov
+
+# === Old Versions (V1/V2) ===
+sukarak_mazbot-frontend/
+sukarak_mazbot_backend/
+
+# === Frames / Assets ===
+vid1_frames/
+vid2_frames/
+
+# === Workspace Files ===
+*.code-workspace
+
+# === Capacitor / Mobile Build ===
+sukarak_mazbot_v3_frontend/android/.gradle/
+sukarak_mazbot_v3_frontend/android/app/build/
+sukarak_mazbot_v3_frontend/android/build/
+sukarak_mazbot_v3_frontend/android/.idea/
+sukarak_mazbot_v3_frontend/android/local.properties
+sukarak_mazbot_v3_frontend/ios/App/Pods/
+
+# === Misc ===
+not.docx
+not_full.txt
