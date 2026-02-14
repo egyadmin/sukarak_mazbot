@@ -31,6 +31,12 @@ const AdminLogin = ({ onLogin }) => {
             if (!res.ok) throw new Error(data.detail || 'خطأ في تسجيل الدخول');
             const role = data.user?.role;
             // Save token for all users
+            localStorage.setItem('sukarak_token', data.access_token);
+            localStorage.setItem('sukarak_user_id', data.user.id);
+            localStorage.setItem('sukarak_user_name', data.user.name);
+            localStorage.setItem('sukarak_user_email', data.user.email);
+            localStorage.setItem('sukarak_user_role', data.user.role || 'user');
+            
             localStorage.setItem('admin_token', data.access_token);
             localStorage.setItem('admin_user', JSON.stringify(data.user));
 
