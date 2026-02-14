@@ -39,6 +39,7 @@ import PrivacyPolicyPage from './pages/PrivacyPolicyPage';
 import TermsPage from './pages/TermsPage';
 import RefundPolicyPage from './pages/RefundPolicyPage';
 import AboutUsPage from './pages/AboutUsPage';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function AppContent() {
     const { i18n } = useTranslation();
@@ -133,11 +134,31 @@ function AppContent() {
                             <Route path="/terms" element={<TermsPage />} />
                             <Route path="/refund-policy" element={<RefundPolicyPage />} />
                             <Route path="/about-us" element={<AboutUsPage />} />
-                            <Route path="/admin" element={<AdminDashboard />} />
+                            
+                            <Route path="/admin/*" element={
+                                <ProtectedRoute allowedRoles={['admin']}>
+                                    <AdminDashboard />
+                                </ProtectedRoute>
+                            } />
                             <Route path="/admin/login" element={<AdminLogin onLogin={() => window.location.href = '/admin'} />} />
-                            <Route path="/doctor" element={<DoctorDashboard />} />
-                            <Route path="/seller" element={<SellerDashboard />} />
-                            <Route path="/nursing-admin" element={<NursingDashboard />} />
+                            
+                            <Route path="/doctor/*" element={
+                                <ProtectedRoute allowedRoles={['doctor', 'admin']}>
+                                    <DoctorDashboard />
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/seller/*" element={
+                                <ProtectedRoute allowedRoles={['seller', 'admin']}>
+                                    <SellerDashboard />
+                                </ProtectedRoute>
+                            } />
+                            
+                            <Route path="/nursing-admin/*" element={
+                                <ProtectedRoute allowedRoles={['nurse', 'admin']}>
+                                    <NursingDashboard />
+                                </ProtectedRoute>
+                            } />
                         </Routes>
                     </main>
 
