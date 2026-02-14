@@ -17,8 +17,8 @@ const getBaseUrl = () => {
     if (isMobileApp || /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)) {
         // Android Emulator uses 10.0.2.2 to reach host machine
         // Physical devices use the actual network IP
-        const hostIp = isAndroidEmulator ? '10.0.2.2' : '192.168.3.37';
-        return `http://${hostIp}:3000`;
+        const hostIp = isAndroidEmulator ? '10.0.2.2' : window.location.hostname;
+        return `http://${hostIp}:5000`;
     }
 
     // Default for local web development (Vite proxy will handle it if BASE_URL is empty)
