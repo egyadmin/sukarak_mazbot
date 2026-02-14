@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Plus, X, Check, MapPin, Calendar, Clock, Loader2, User, Phone, Search, Syringe, HeartPulse, Bandage, MoreHorizontal } from 'lucide-react';
+import { ArrowRight, Plus, X, Check, MapPin, Calendar, Clock, Loader2, User, Phone, Search, Syringe, HeartPulse, Bandage, MoreHorizontal, ShoppingCart, CreditCard } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { API_BASE } from '../api/config';
-import bannerImg from '@assets/image_1771065498662.png';
+import bannerImg from '@assets/nursing_banner.png';
 
-const API = `${API_BASE}/nursing`;
+const SERVICES_API = `${API_BASE}/services/nursing/services`;
+const BOOKINGS_API = `${API_BASE}/services/nursing/bookings`;
 
 const nursingCategories = [
     { key: 'injections', icon: Syringe, label_ar: 'الحقن والمحاليل', label_en: 'Injections & IV', color: 'from-sky-400 to-blue-500', bg: 'bg-sky-50' },
@@ -32,8 +33,8 @@ const NursingView = () => {
     const fetchData = async () => {
         try {
             const [sRes, bRes] = await Promise.all([
-                fetch(`${API}/services`),
-                fetch(`${API}/bookings`),
+                fetch(`${SERVICES_API}?service_type=nursing`),
+                fetch(BOOKINGS_API),
             ]);
             if (sRes.ok) setServices(await sRes.json());
             if (bRes.ok) setBookings(await bRes.json());
@@ -49,7 +50,7 @@ const NursingView = () => {
     const handleBook = async () => {
         if (!form.date || !form.address) return;
         try {
-            const res = await fetch(`${API}/bookings`, {
+            const res = await fetch(BOOKINGS_API, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -77,7 +78,7 @@ const NursingView = () => {
 
     const handleCancel = async (id) => {
         try {
-            await fetch(`${API}/bookings/${id}`, { method: 'DELETE' });
+            await fetch(`${BOOKINGS_API}/${id}`, { method: 'DELETE' });
             fetchData();
         } catch (err) {
             console.error('Failed to cancel booking:', err);
@@ -98,9 +99,10 @@ const NursingView = () => {
     };
 
     const filteredServices = services.filter(svc => {
+        if (selectedCategory && svc.category !== selectedCategory) return false;
         if (searchQuery) {
             const q = searchQuery.toLowerCase();
-            return svc.title?.toLowerCase().includes(q) || svc.description?.toLowerCase().includes(q);
+            return svc.title?.toLowerCase().includes(q) || svc.title_en?.toLowerCase().includes(q);
         }
         return true;
     });
@@ -120,8 +122,13 @@ const NursingView = () => {
                 </h2>
             </div>
 
-            <div className="rounded-2xl overflow-hidden shadow-sm">
-                <img src={bannerImg} alt="Sukarak Mazboot" className="w-full h-40 object-cover" />
+            <div className="relative rounded-2xl overflow-hidden shadow-lg">
+                <img src={bannerImg} alt="Home Nursing" className="w-full h-44 object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
+                <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
+                    <h3 className="text-lg font-black mb-1">{lang === 'ar' ? 'خدمات التمريض المنزلي' : 'Home Nursing Services'}</h3>
+                    <p className="text-xs text-white/80">{lang === 'ar' ? 'اطلب ممرض/ة لمنزلك بأفضل الأسعار' : 'Book a nurse to your home at the best prices'}</p>
+                </div>
             </div>
 
             <div className="relative">
@@ -169,16 +176,28 @@ const NursingView = () => {
                                 initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                                 transition={{ delay: i * 0.05 }}
                                 onClick={() => setShowBook(svc)}
-                                className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 text-center active:scale-95 transition hover:shadow flex flex-col items-center gap-3"
+                                className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50 text-center active:scale-95 transition hover:shadow flex flex-col items-center gap-2"
                                 data-testid={`button-service-${svc.id}`}
                             >
-                                <div className={`text-3xl w-12 h-12 bg-gradient-to-br ${svc.color || 'from-emerald-400 to-teal-500'} rounded-xl flex items-center justify-center text-white`}>
+                                <div className={`text-2xl w-12 h-12 bg-gradient-to-br ${svc.color || 'from-emerald-400 to-teal-500'} rounded-xl flex items-center justify-center text-white`}>
                                     <span>{svc.icon}</span>
                                 </div>
                                 <h4 className="font-bold text-sm text-primary-dark leading-tight">{svc.title}</h4>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-sm font-black text-emerald-600">{svc.price}</span>
+                                    <span className="text-[10px] text-gray-400">{lang === 'ar' ? 'ر.س' : 'SAR'}</span>
+                                </div>
+                                {svc.duration && <span className="text-[10px] text-gray-400">{svc.duration}</span>}
                             </motion.button>
                         ))}
                     </div>
+                </div>
+            )}
+
+            {filteredServices.length === 0 && !loading && (
+                <div className="text-center py-10 bg-white rounded-3xl border border-dashed border-gray-200">
+                    <Search className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                    <p className="text-gray-400 font-bold text-sm">{lang === 'ar' ? 'لا توجد خدمات في هذا القسم' : 'No services in this category'}</p>
                 </div>
             )}
 
@@ -223,6 +242,9 @@ const NursingView = () => {
                             <p className="text-sm text-white/90 font-bold">
                                 {lang === 'ar' ? 'الممرضة: ' : 'Nurse: '}{successData.nurse_name}
                             </p>
+                            {successData.price && (
+                                <p className="text-sm text-white/80 font-bold">{lang === 'ar' ? 'المبلغ: ' : 'Amount: '}{successData.price} {lang === 'ar' ? 'ر.س' : 'SAR'}</p>
+                            )}
                         </div>
                     </motion.div>
                 )}
@@ -244,6 +266,22 @@ const NursingView = () => {
                                 <button onClick={() => setShowBook(null)} className="p-2 hover:bg-gray-100 rounded-xl"><X className="w-5 h-5 text-gray-400" /></button>
                             </div>
                             <div className="p-6 space-y-5">
+                                <div className="bg-gradient-to-l from-emerald-50 to-teal-50 p-4 rounded-2xl flex items-center justify-between">
+                                    <div className="flex items-center gap-3">
+                                        <div className={`w-12 h-12 bg-gradient-to-br ${showBook.color || 'from-emerald-400 to-teal-500'} rounded-xl flex items-center justify-center text-white text-xl`}>
+                                            {showBook.icon}
+                                        </div>
+                                        <div>
+                                            <p className="font-black text-primary-dark">{showBook.title}</p>
+                                            {showBook.duration && <p className="text-[11px] text-gray-400">{showBook.duration}</p>}
+                                        </div>
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-xl font-black text-emerald-600">{showBook.price}</p>
+                                        <p className="text-[10px] text-gray-400">{lang === 'ar' ? 'ر.س' : 'SAR'}</p>
+                                    </div>
+                                </div>
+
                                 <div>
                                     <label className="block text-sm font-bold text-gray-500 mb-2">{lang === 'ar' ? 'التاريخ *' : 'Date *'}</label>
                                     <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
@@ -276,10 +314,16 @@ const NursingView = () => {
                                         rows={2} className="w-full bg-gray-50 p-3 rounded-xl border-2 border-gray-100 focus:border-primary-emerald outline-none text-sm resize-none"
                                         data-testid="input-booking-notes" />
                                 </div>
+
+                                <div className="bg-gray-50 p-4 rounded-2xl flex items-center justify-between">
+                                    <span className="text-sm font-bold text-gray-500">{lang === 'ar' ? 'المبلغ المطلوب' : 'Total Amount'}</span>
+                                    <span className="text-lg font-black text-emerald-600">{showBook.price} {lang === 'ar' ? 'ر.س' : 'SAR'}</span>
+                                </div>
+
                                 <button onClick={handleBook} disabled={!form.date || !form.address}
                                     className="w-full bg-gradient-to-l from-primary-dark to-primary-emerald text-white py-4 rounded-2xl font-black flex items-center justify-center gap-2 shadow-lg shadow-emerald-200/50 disabled:opacity-50 active:scale-[0.98] transition"
                                     data-testid="button-confirm-booking">
-                                    <Check className="w-5 h-5" /> {lang === 'ar' ? 'تأكيد الحجز' : 'Confirm Booking'}
+                                    <CreditCard className="w-5 h-5" /> {lang === 'ar' ? `تأكيد الحجز - ${showBook.price} ر.س` : `Confirm Booking - ${showBook.price} SAR`}
                                 </button>
                             </div>
                         </motion.div>

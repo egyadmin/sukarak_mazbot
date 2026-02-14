@@ -36,6 +36,8 @@ class NursingServiceCreate(BaseModel):
     duration: Optional[str] = None
     icon: Optional[str] = "🏥"
     color: Optional[str] = "from-teal-500 to-emerald-500"
+    category: Optional[str] = "other"
+    service_type: Optional[str] = "nursing"
 
 
 class NursingServiceUpdate(BaseModel):
@@ -45,6 +47,8 @@ class NursingServiceUpdate(BaseModel):
     duration: Optional[str] = None
     icon: Optional[str] = None
     color: Optional[str] = None
+    category: Optional[str] = None
+    service_type: Optional[str] = None
     active: Optional[int] = None
 
 
@@ -97,9 +101,12 @@ def get_nursing_stats(db: Session = Depends(get_db)):
 # ════════════════════════════════════════
 
 @router.get("/services")
-def list_all_services(db: Session = Depends(get_db)):
-    """Get all nursing services (including inactive)."""
-    services = db.query(NursingService).all()
+def list_all_services(service_type: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get all services (including inactive), optionally filtered by type."""
+    q = db.query(NursingService)
+    if service_type:
+        q = q.filter(NursingService.service_type == service_type)
+    services = q.all()
     return [{
         "id": s.id,
         "title": s.title,
@@ -108,6 +115,8 @@ def list_all_services(db: Session = Depends(get_db)):
         "duration": s.duration,
         "icon": s.icon,
         "color": s.color,
+        "category": s.category,
+        "service_type": s.service_type,
         "active": s.active,
     } for s in services]
 
@@ -122,6 +131,8 @@ def create_service(data: NursingServiceCreate, db: Session = Depends(get_db)):
         duration=data.duration,
         icon=data.icon,
         color=data.color,
+        category=data.category,
+        service_type=data.service_type,
         active=1,
     )
     db.add(svc)
@@ -136,7 +147,7 @@ def update_service(service_id: int, data: NursingServiceUpdate, db: Session = De
     svc = db.query(NursingService).filter(NursingService.id == service_id).first()
     if not svc:
         raise HTTPException(status_code=404, detail="Service not found")
-    for field in ['title', 'title_en', 'price', 'duration', 'icon', 'color', 'active']:
+    for field in ['title', 'title_en', 'price', 'duration', 'icon', 'color', 'category', 'service_type', 'active']:
         val = getattr(data, field, None)
         if val is not None:
             setattr(svc, field, val)

@@ -28,9 +28,11 @@ class NursingService(Base):
     title = Column(String(255), nullable=False)
     title_en = Column(String(255))
     price = Column(Float, default=0)
-    duration = Column(String(50))                      # e.g. "30 دقيقة"
-    icon = Column(String(10))                          # emoji icon
-    color = Column(String(100))                        # gradient class
+    duration = Column(String(50))
+    icon = Column(String(10))
+    color = Column(String(100))
+    category = Column(String(100), default="other")
+    service_type = Column(String(50), default="nursing")
     active = Column(Integer, default=1)
 
 

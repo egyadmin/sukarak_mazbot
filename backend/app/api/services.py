@@ -206,24 +206,14 @@ def delete_test_attachment(test_id: int, index: int, db: Session = Depends(get_d
 # ════════════════════════════════════════
 
 @router.get("/nursing/services")
-def get_nursing_services(db: Session = Depends(get_db)):
-    """Get all available nursing services."""
-    services = db.query(NursingService).filter(NursingService.active == 1).all()
-    if not services:
-        # Seed default services if none exist
-        defaults = [
-            {"title": "قياس السكر والضغط", "title_en": "Sugar & BP Check", "price": 50, "duration": "30 دقيقة", "icon": "🩺", "color": "from-teal-500 to-emerald-500"},
-            {"title": "الحقن والمحاليل", "title_en": "Injections & IV", "price": 75, "duration": "20 دقيقة", "icon": "💉", "color": "from-blue-500 to-indigo-500"},
-            {"title": "تغيير الضمادات", "title_en": "Wound Dressing", "price": 100, "duration": "45 دقيقة", "icon": "🩹", "color": "from-orange-500 to-amber-500"},
-            {"title": "سحب عينات دم", "title_en": "Blood Sample", "price": 80, "duration": "15 دقيقة", "icon": "🧪", "color": "from-red-500 to-rose-500"},
-            {"title": "رعاية ما بعد العمليات", "title_en": "Post-Op Care", "price": 200, "duration": "60 دقيقة", "icon": "🏥", "color": "from-purple-500 to-violet-500"},
-            {"title": "خدمات أخرى", "title_en": "Other Services", "price": 150, "duration": "45 دقيقة", "icon": "➕", "color": "from-cyan-500 to-blue-500"},
-        ]
-        for d in defaults:
-            svc = NursingService(**d)
-            db.add(svc)
-        db.commit()
-        services = db.query(NursingService).filter(NursingService.active == 1).all()
+def get_nursing_services(service_type: Optional[str] = None, category: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get all available services filtered by type and category."""
+    q = db.query(NursingService).filter(NursingService.active == 1)
+    if service_type:
+        q = q.filter(NursingService.service_type == service_type)
+    if category:
+        q = q.filter(NursingService.category == category)
+    services = q.all()
 
     return [{
         "id": s.id,
@@ -233,6 +223,8 @@ def get_nursing_services(db: Session = Depends(get_db)):
         "duration": s.duration,
         "icon": s.icon,
         "color": s.color,
+        "category": s.category,
+        "service_type": s.service_type,
     } for s in services]
 
 
