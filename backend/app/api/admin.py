@@ -485,11 +485,12 @@ def get_settings(db: Session = Depends(get_db)):
     settings = db.query(AppSetting).all()
     result = {}
     for s in settings:
-        if s.group not in result:
-            result[s.group] = []
-        result[s.group].append({
+        grp = s.setting_group or "general"
+        if grp not in result:
+            result[grp] = []
+        result[grp].append({
             "id": s.id, "key": s.key, "value": s.value,
-            "label": s.label, "group": s.group, "type": s.type,
+            "label": s.label, "group": grp, "type": s.type,
         })
     return result
 
