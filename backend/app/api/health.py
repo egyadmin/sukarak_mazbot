@@ -285,6 +285,17 @@ def approve_session(appt_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Session is not pending")
     appt.session_request = "approved"
     appt.status = "in_progress"
+    
+    # Send notification to patient
+    from app.models.activity import ActivityLog
+    notif = ActivityLog(
+        user_id=appt.patient_id,
+        activity_type="session_approved",
+        description=f"تمت الموافقة على طلب الجلسة مع {appt.doctor_name or 'الطبيب'}. يمكنك الدخول الآن.",
+        metadata={"appt_id": appt.id, "room_id": appt.session_room_id}
+    )
+    db.add(notif)
+    
     db.commit()
     return {
         "status": "success",

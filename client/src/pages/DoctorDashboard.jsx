@@ -28,6 +28,7 @@ const DoctorDashboard = () => {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [mobileMenu, setMobileMenu] = useState(false);
     const [appointments, setAppointments] = useState([]);
+    const [sessionRequests, setSessionRequests] = useState([]);
     const [patients, setPatients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [expandedAppt, setExpandedAppt] = useState(null);
@@ -72,14 +73,17 @@ const DoctorDashboard = () => {
     const loadData = useCallback(async (doctorId) => {
         setLoading(true);
         try {
-            const [apptRes, patRes] = await Promise.all([
+            const [apptRes, patRes, sessRes] = await Promise.all([
                 fetch(`${API_BASE}/health/doctor/appointments?doctor_id=${doctorId}`),
                 fetch(`${API_BASE}/health/doctor/patients?doctor_id=${doctorId}`),
+                fetch(`${API_BASE}/health/session-requests`),
             ]);
             const apptData = await apptRes.json();
             const patData = await patRes.json();
+            const sessData = await sessRes.json();
             setAppointments(Array.isArray(apptData) ? apptData : []);
             setPatients(Array.isArray(patData) ? patData : []);
+            setSessionRequests(Array.isArray(sessData) ? sessData : []);
         } catch (err) { console.error(err); }
         setLoading(false);
     }, []);
@@ -119,11 +123,30 @@ const DoctorDashboard = () => {
     const pendingAppts = appointments.filter(a => a.status === 'pending');
     const completedAppts = appointments.filter(a => a.status === 'completed');
 
+    const handleApproveSession = async (id) => {
+        try {
+            const res = await fetch(`${API_BASE}/health/appointments/${id}/approve-session`, { method: 'PUT' });
+            if (res.ok) {
+                showToast('تم قبول طلب الجلسة - يمكنك الانضمام الآن');
+                if (doctor) loadData(doctor.id);
+            }
+        } catch (err) { console.error(err); }
+    };
+
+    const handleRejectSession = async (id) => {
+        try {
+            await fetch(`${API_BASE}/health/appointments/${id}/reject-session`, { method: 'PUT' });
+            showToast('تم رفض طلب الجلسة');
+            if (doctor) loadData(doctor.id);
+        } catch (err) { console.error(err); }
+    };
+
     const glass = 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.08] shadow-2xl';
 
     const sideItems = [
         { id: 'dashboard', label: 'الرئيسية', icon: Home },
         { id: 'appointments', label: 'المواعيد', icon: Calendar, badge: pendingAppts.length },
+        { id: 'sessions', label: 'طلبات الجلسات', icon: Video, badge: sessionRequests.length },
         { id: 'patients', label: 'المرضى', icon: Users },
         { id: 'settings', label: 'الإعدادات', icon: Settings },
     ];
@@ -165,8 +188,38 @@ const DoctorDashboard = () => {
             </aside>
             {mobileMenu && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden" onClick={() => setMobileMenu(false)} />}
 
+            {/* ══ Mobile Bottom Navigation ══ */}
+            <nav className="lg:hidden fixed bottom-0 left-0 right-0 h-20 bg-[#0c1322]/80 backdrop-blur-2xl border-t border-white/5 z-50 flex items-center justify-around px-4">
+                {sideItems.map(s => (
+                    <button 
+                        key={s.id} 
+                        onClick={() => setActiveTab(s.id)}
+                        className={`flex flex-col items-center gap-1 transition-all ${activeTab === s.id ? 'text-blue-400' : 'text-white/20'}`}
+                    >
+                        <div className={`relative p-2 rounded-xl transition-all ${activeTab === s.id ? 'bg-blue-400/10' : ''}`}>
+                            <s.icon className="w-6 h-6" />
+                            {s.badge > 0 && (
+                                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[9px] flex items-center justify-center rounded-full font-black border-2 border-[#0c1322]">
+                                    {s.badge}
+                                </span>
+                            )}
+                        </div>
+                        <span className="text-[9px] font-bold">{s.label}</span>
+                    </button>
+                ))}
+                <button 
+                    onClick={() => { localStorage.removeItem('admin_user'); window.location.href='/admin/login'; }}
+                    className="flex flex-col items-center gap-1 text-red-400/40"
+                >
+                    <div className="p-2">
+                        <LogOut className="w-6 h-6" />
+                    </div>
+                    <span className="text-[9px] font-bold">خروج</span>
+                </button>
+            </nav>
+
             {/* ══ Main ══ */}
-            <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+            <main className="flex-1 p-4 md:p-8 overflow-y-auto pb-28 lg:pb-8">
                 <header className="flex justify-between items-center mb-8">
                     <div className="flex items-center gap-4">
                         <button className="lg:hidden p-2 rounded-xl bg-white/[0.05]" onClick={() => setMobileMenu(true)}><Menu className="w-5 h-5" /></button>
@@ -289,6 +342,54 @@ const DoctorDashboard = () => {
                                         ))}
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* ═══════ SESSION REQUESTS ═══════ */}
+                        {activeTab === 'sessions' && (
+                            <div className="space-y-6">
+                                <h3 className="text-xl font-black">طلبات بدء الجلسات الحالية</h3>
+                                {sessionRequests.length === 0 ? (
+                                    <div className={`${glass} rounded-3xl p-16 text-center`}>
+                                        <Video className="w-16 h-16 mx-auto opacity-10 mb-4" />
+                                        <p className="text-white/30 font-bold text-lg">لا توجد طلبات جلسات حالية</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        {sessionRequests.map(req => (
+                                            <div key={req.id} className={`${glass} rounded-3xl p-6 flex flex-col gap-4`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center font-black text-xl">
+                                                        {req.patient_name?.[0]}
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-black text-lg">{req.patient_name}</p>
+                                                        <p className="text-white/40 text-xs">طلب بدء جلسة {req.appointment_type === 'chat' ? 'محادثة' : 'فيديو'}</p>
+                                                    </div>
+                                                </div>
+                                                {req.notes && (
+                                                    <div className="bg-white/5 p-3 rounded-xl text-xs text-white/60 italic">
+                                                        " {req.notes} "
+                                                    </div>
+                                                )}
+                                                <div className="flex gap-2 mt-2">
+                                                    <button 
+                                                        onClick={() => handleApproveSession(req.id)}
+                                                        className="flex-1 py-3 bg-gradient-to-l from-emerald-500 to-emerald-600 rounded-2xl text-sm font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition"
+                                                    >
+                                                        قبول وبدء الجلسة
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleRejectSession(req.id)}
+                                                        className="px-6 py-3 bg-white/5 hover:bg-red-500/10 rounded-2xl text-sm font-black text-red-400 border border-white/5 transition"
+                                                    >
+                                                        رفض
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
 
