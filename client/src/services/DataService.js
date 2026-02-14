@@ -160,8 +160,12 @@ class DataService {
         return this.fetchWithCache('/api/v1/health/insulin', 'insulin_readings', { forceRefresh });
     }
 
-    static async getMealRecords(forceRefresh = false) {
+    static async getMeals(forceRefresh = false) {
         return this.fetchWithCache('/api/v1/health/meals', 'meals_records', { forceRefresh });
+    }
+
+    static async getMealRecords(forceRefresh = false) {
+        return this.getMeals(forceRefresh);
     }
 
     static async getExerciseRecords(forceRefresh = false) {

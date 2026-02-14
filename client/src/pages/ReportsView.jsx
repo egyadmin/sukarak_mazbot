@@ -76,7 +76,7 @@ const ReportsView = () => {
     const filteredInsulin = filterByPeriod(insulin);
 
     const chartData = [...filteredReadings].reverse().map(r => ({
-        name: new Date(r.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }),
+        name: r.created_at ? new Date(r.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }) : '--',
         sugar: r.reading,
         type: getTypeLabel(r.test_type),
     }));
@@ -115,14 +115,15 @@ const ReportsView = () => {
     ];
 
     const handleExportPDF = async () => {
-        if (filteredReadings.length === 0) return;
+        if (!filteredReadings || filteredReadings.length === 0) return;
         setExporting(true);
         try {
             await exportHealthReport(filteredReadings, period, insight);
         } catch (err) {
             console.error('Export error:', err);
+        } finally {
+            setExporting(false);
         }
-        setExporting(false);
     };
 
     const totalExerciseMinutes = filteredExercises.reduce((s, e) => s + (e.duration || 0), 0);
@@ -146,7 +147,7 @@ const ReportsView = () => {
     const mealsPieData = Object.entries(mealsByType).map(([name, data]) => ({ name: getMealTypeLabel(name), value: data.count, calories: Math.round(data.calories) }));
 
     const insulinChartData = [...filteredInsulin].reverse().map(r => ({
-        name: new Date(r.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }),
+        name: r.created_at ? new Date(r.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }) : '--',
         units: r.reading,
         type: r.test_type,
     }));
