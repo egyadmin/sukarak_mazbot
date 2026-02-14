@@ -38,7 +38,8 @@ const NursingDashboard = () => {
     const [showNurseModal, setShowNurseModal] = useState(false);
     const [editingService, setEditingService] = useState(null);
 
-    const [serviceForm, setServiceForm] = useState({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500' });
+    const [serviceForm, setServiceForm] = useState({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500', service_type: 'nursing', category: 'other' });
+    const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
     const [nurseForm, setNurseForm] = useState({ name: '', email: '', phone: '', password: '' });
 
     const nurseUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
@@ -82,7 +83,7 @@ const NursingDashboard = () => {
         }
         setShowServiceModal(false);
         setEditingService(null);
-        setServiceForm({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500' });
+        setServiceForm({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500', service_type: 'nursing', category: 'other' });
         load();
     };
 
@@ -91,7 +92,7 @@ const NursingDashboard = () => {
 
     const editService = (s) => {
         setEditingService(s);
-        setServiceForm({ title: s.title, title_en: s.title_en || '', price: s.price || '', duration: s.duration || '', icon: s.icon || '🏥', color: s.color || 'from-teal-500 to-emerald-500' });
+        setServiceForm({ title: s.title, title_en: s.title_en || '', price: s.price || '', duration: s.duration || '', icon: s.icon || '🏥', color: s.color || 'from-teal-500 to-emerald-500', service_type: s.service_type || 'nursing', category: s.category || 'other' });
         setShowServiceModal(true);
     };
 
@@ -392,10 +393,22 @@ const NursingDashboard = () => {
                     <div className="space-y-6">
                         <div className="flex justify-between items-center">
                             <p className="text-white/30 text-sm">{services.length} خدمة</p>
-                            <button onClick={() => { setEditingService(null); setServiceForm({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500' }); setShowServiceModal(true); }} className="bg-gradient-to-l from-teal-500 to-emerald-600 px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-teal-500/20"><Plus className="w-4 h-4" /> إضافة خدمة</button>
+                            <button onClick={() => { setEditingService(null); setServiceForm({ title: '', title_en: '', price: '', duration: '', icon: '🏥', color: 'from-teal-500 to-emerald-500', service_type: 'nursing', category: 'other' }); setShowServiceModal(true); }} className="bg-gradient-to-l from-teal-500 to-emerald-600 px-5 py-2.5 rounded-xl text-sm font-black flex items-center gap-2 shadow-lg shadow-teal-500/20"><Plus className="w-4 h-4" /> إضافة خدمة</button>
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                            {[
+                                { key: 'all', label: 'الكل' },
+                                { key: 'nursing', label: 'تمريض' },
+                                { key: 'lab', label: 'تحاليل' },
+                            ].map(f => (
+                                <button key={f.key} onClick={() => setServiceTypeFilter(f.key)}
+                                    className={`px-4 py-2 rounded-xl text-xs font-black transition ${serviceTypeFilter === f.key ? 'bg-teal-500 text-white' : 'bg-white/[0.05] text-white/40 hover:bg-white/[0.08]'}`}>
+                                    {f.label}
+                                </button>
+                            ))}
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                            {services.map(s => (
+                            {services.filter(s => serviceTypeFilter === 'all' || s.service_type === serviceTypeFilter).map(s => (
                                 <div key={s.id} className={`${glass} rounded-3xl p-5 ${!s.active ? 'opacity-40' : ''}`}>
                                     <div className="flex items-start justify-between">
                                         <div className="flex items-center gap-3">
@@ -403,6 +416,10 @@ const NursingDashboard = () => {
                                             <div>
                                                 <p className="font-black">{s.title}</p>
                                                 {s.title_en && <p className="text-xs text-white/25">{s.title_en}</p>}
+                                                <div className="flex gap-1.5 mt-1">
+                                                    <span className={`text-[8px] px-1.5 py-0.5 rounded font-bold ${s.service_type === 'lab' ? 'bg-sky-500/20 text-sky-400' : 'bg-emerald-500/20 text-emerald-400'}`}>{s.service_type === 'lab' ? 'تحاليل' : 'تمريض'}</span>
+                                                    {s.category && <span className="text-[8px] px-1.5 py-0.5 rounded bg-white/[0.05] text-white/30 font-bold">{s.category}</span>}
+                                                </div>
                                             </div>
                                         </div>
                                         <div className="flex gap-1">
@@ -467,7 +484,34 @@ const NursingDashboard = () => {
                             <h3 className="font-black text-lg">{editingService ? 'تعديل الخدمة' : 'إضافة خدمة جديدة'}</h3>
                             <button onClick={() => setShowServiceModal(false)} className="p-2 rounded-xl bg-white/[0.05]"><X className="w-5 h-5" /></button>
                         </div>
-                        <div className="space-y-4">
+                        <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">نوع الخدمة *</label>
+                                    <select className={`${inputStyle} bg-[#1e293b]`} value={serviceForm.service_type} onChange={e => setServiceForm({ ...serviceForm, service_type: e.target.value, category: 'other' })}>
+                                        <option value="nursing">تمريض منزلي</option>
+                                        <option value="lab">تحاليل طبية</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">التصنيف *</label>
+                                    <select className={`${inputStyle} bg-[#1e293b]`} value={serviceForm.category} onChange={e => setServiceForm({ ...serviceForm, category: e.target.value })}>
+                                        {serviceForm.service_type === 'nursing' ? (<>
+                                            <option value="injections">الحقن والمحاليل</option>
+                                            <option value="monitoring">متابعة السكر والضغط</option>
+                                            <option value="wounds">تضميد الجروح</option>
+                                            <option value="other">خدمات أخرى</option>
+                                        </>) : (<>
+                                            <option value="blood">تحاليل الدم</option>
+                                            <option value="diabetes">تحاليل السكري</option>
+                                            <option value="hormones">الغدة والهرمونات</option>
+                                            <option value="liver_kidney">الكبد والكلى</option>
+                                            <option value="vitamins">الفيتامينات والمعادن</option>
+                                            <option value="other">أخرى</option>
+                                        </>)}
+                                    </select>
+                                </div>
+                            </div>
                             <div>
                                 <label className="block text-white/30 text-[10px] font-black mb-1.5">اسم الخدمة (عربي) *</label>
                                 <input className={inputStyle} value={serviceForm.title} onChange={e => setServiceForm({ ...serviceForm, title: e.target.value })} placeholder="مثل: رعاية منزلية" />
@@ -478,7 +522,7 @@ const NursingDashboard = () => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">السعر (SAR)</label>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1.5">السعر (SAR) *</label>
                                     <input type="number" className={inputStyle} value={serviceForm.price} onChange={e => setServiceForm({ ...serviceForm, price: e.target.value })} placeholder="0" />
                                 </div>
                                 <div>
@@ -498,6 +542,10 @@ const NursingDashboard = () => {
                                         <option value="from-blue-500 to-indigo-500">أزرق</option>
                                         <option value="from-purple-500 to-fuchsia-500">بنفسجي</option>
                                         <option value="from-rose-500 to-pink-500">وردي</option>
+                                        <option value="from-sky-400 to-blue-500">سماوي</option>
+                                        <option value="from-red-400 to-rose-500">أحمر</option>
+                                        <option value="from-amber-400 to-orange-500">برتقالي</option>
+                                        <option value="from-violet-400 to-purple-500">بنفسجي فاتح</option>
                                     </select>
                                 </div>
                             </div>

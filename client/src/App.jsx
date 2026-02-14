@@ -20,7 +20,7 @@ import FoodsView from './pages/FoodsView';
 import SportsView from './pages/SportsView';
 import MedicationsView from './pages/MedicationsView';
 import NotificationsView from './pages/NotificationsView';
-import InsulinCalculatorView from './pages/InsulinCalculatorView';
+import InsulinCalculator from './pages/InsulinCalculator';
 import MedicalTestsView from './pages/MedicalTestsView';
 import NursingView from './pages/NursingView';
 import NursingDashboard from './pages/NursingDashboard';
@@ -118,7 +118,7 @@ function AppContent() {
                             <Route path="/sports" element={<SportsView />} />
                             <Route path="/medications" element={<MedicationsView />} />
                             <Route path="/notifications" element={<NotificationsView />} />
-                            <Route path="/insulin-calculator" element={<InsulinCalculatorView />} />
+                            <Route path="/insulin-calculator" element={<InsulinCalculator />} />
                             <Route path="/medical-tests" element={<MedicalTestsView />} />
                             <Route path="/nursing" element={<NursingView />} />
                             <Route path="/my-orders" element={<MyOrdersView />} />
