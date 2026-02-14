@@ -42,9 +42,13 @@ const DoctorDashboard = () => {
     const [chatInput, setChatInput] = useState('');
     const [consultTimer, setConsultTimer] = useState(0);
     const [patientJoined, setPatientJoined] = useState(false);
+    const [micOn, setMicOn] = useState(true);
+    const [camOn, setCamOn] = useState(true);
     const timerRef = useRef(null);
     const chatEndRef = useRef(null);
     const wsRef = useRef(null);
+    const localVideoRef = useRef(null);
+    const localStreamRef = useRef(null);
 
     // Settings state
     const [settingsSection, setSettingsSection] = useState('profile');
@@ -202,6 +206,32 @@ const DoctorDashboard = () => {
         ws.onclose = () => { wsRef.current = null; };
     };
 
+    const startMedia = async () => {
+        try {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            localStreamRef.current = stream;
+            if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+        } catch (err) { console.log('Media access error:', err); }
+    };
+
+    const stopMedia = () => {
+        if (localStreamRef.current) {
+            localStreamRef.current.getTracks().forEach(track => track.stop());
+            localStreamRef.current = null;
+        }
+    };
+
+    const toggleMic = () => {
+        if (localStreamRef.current) localStreamRef.current.getAudioTracks().forEach(t => t.enabled = !t.enabled);
+        setMicOn(!micOn);
+    };
+
+    const toggleCam = () => {
+        if (localStreamRef.current) localStreamRef.current.getVideoTracks().forEach(t => t.enabled = !t.enabled);
+        setCamOn(!camOn);
+    };
+
     const startConsultation = (apptData) => {
         const roomId = apptData.room_id || apptData.session_room_id;
         if (!roomId) {
@@ -210,17 +240,22 @@ const DoctorDashboard = () => {
         }
         if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        stopMedia();
         setActiveConsultation({ ...apptData, room_id: roomId });
         setPatientJoined(false);
+        setMicOn(true);
+        setCamOn(true);
         setChatMessages([{ id: 1, from: 'system', text: `بدأت الجلسة مع ${apptData.patient_name || 'المريض'}`, time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }]);
         setConsultTimer(0);
         timerRef.current = setInterval(() => setConsultTimer(t => t + 1), 1000);
         connectWebSocket(roomId);
+        setTimeout(() => startMedia(), 500);
         setActiveTab('consultation');
     };
 
     const handleEndConsultation = async () => {
         if (timerRef.current) clearInterval(timerRef.current);
+        stopMedia();
         if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
         if (activeConsultation?.id) {
             try { await fetch(`${API_BASE}/health/appointments/${activeConsultation.id}/end-session`, { method: 'PUT' }); } catch { }
@@ -257,6 +292,9 @@ const DoctorDashboard = () => {
         return () => {
             if (wsRef.current) wsRef.current.close();
             if (timerRef.current) clearInterval(timerRef.current);
+            if (localStreamRef.current) {
+                localStreamRef.current.getTracks().forEach(track => track.stop());
+            }
         };
     }, []);
 
@@ -577,54 +615,121 @@ const DoctorDashboard = () => {
                                                 </div>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={handleEndConsultation}
-                                            className="flex items-center gap-2 bg-red-500/80 hover:bg-red-500 px-4 py-2 rounded-xl text-xs font-black transition"
-                                        >
-                                            <PhoneOff className="w-4 h-4" /> إنهاء الجلسة
-                                        </button>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                onClick={toggleMic}
+                                                data-testid="button-toggle-mic"
+                                                className={`p-2.5 rounded-xl transition ${micOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-600'}`}
+                                            >
+                                                {micOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
+                                            </button>
+                                            <button
+                                                onClick={toggleCam}
+                                                data-testid="button-toggle-cam"
+                                                className={`p-2.5 rounded-xl transition ${camOn ? 'bg-white/20 hover:bg-white/30' : 'bg-red-500 hover:bg-red-600'}`}
+                                            >
+                                                {camOn ? <Camera className="w-4 h-4" /> : <CameraOff className="w-4 h-4" />}
+                                            </button>
+                                            <button
+                                                onClick={handleEndConsultation}
+                                                data-testid="button-end-consultation"
+                                                className="flex items-center gap-2 bg-red-500/80 hover:bg-red-500 px-4 py-2 rounded-xl text-xs font-black transition"
+                                            >
+                                                <PhoneOff className="w-4 h-4" /> إنهاء الجلسة
+                                            </button>
+                                        </div>
                                     </div>
 
-                                    <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
-                                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                                            {chatMessages.map(msg => (
-                                                <div key={msg.id} className={`flex ${msg.from === 'doctor' ? 'justify-start' : msg.from === 'system' ? 'justify-center' : 'justify-end'}`}>
-                                                    {msg.from === 'system' ? (
-                                                        <div className="bg-white/5 text-white/30 text-[10px] px-4 py-1.5 rounded-full font-bold">
-                                                            {msg.text}
-                                                        </div>
-                                                    ) : (
-                                                        <div className={`max-w-[75%] ${msg.from === 'doctor' ? 'bg-blue-500/20 border border-blue-500/10' : 'bg-white/[0.08] border border-white/[0.06]'} rounded-2xl p-3`}>
-                                                            <div className="flex items-center gap-2 mb-1">
-                                                                <span className={`text-[10px] font-black ${msg.from === 'doctor' ? 'text-blue-400' : 'text-emerald-400'}`}>
-                                                                    {msg.from === 'doctor' ? 'أنت' : msg.name || 'المريض'}
-                                                                </span>
-                                                                <span className="text-[9px] text-white/20">{msg.time}</span>
-                                                            </div>
-                                                            <p className="text-sm leading-relaxed">{msg.text}</p>
-                                                        </div>
-                                                    )}
+                                    <div className="flex flex-col lg:flex-row h-[calc(100vh-320px)] min-h-[400px]">
+                                        {/* Video Preview Panel */}
+                                        <div className="relative w-full lg:w-2/5 bg-black/40 flex-shrink-0">
+                                            <video
+                                                ref={localVideoRef}
+                                                autoPlay
+                                                muted
+                                                playsInline
+                                                className="w-full h-full object-cover"
+                                                style={{ minHeight: '200px' }}
+                                            />
+                                            {!camOn && (
+                                                <div className="absolute inset-0 bg-[#0f172a] flex flex-col items-center justify-center gap-3">
+                                                    <div className="w-20 h-20 bg-gradient-to-br from-blue-500/30 to-indigo-500/30 rounded-full flex items-center justify-center">
+                                                        <CameraOff className="w-10 h-10 text-white/30" />
+                                                    </div>
+                                                    <p className="text-white/30 text-sm font-bold">الكاميرا مغلقة</p>
                                                 </div>
-                                            ))}
-                                            <div ref={chatEndRef} />
+                                            )}
+                                            <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                                <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse" />
+                                                أنت (د. {doctor?.name})
+                                            </div>
+                                            {patientJoined && (
+                                                <div className="absolute top-3 right-3 bg-emerald-500/80 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1">
+                                                    <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                                                    المريض متصل
+                                                </div>
+                                            )}
+                                            {!micOn && (
+                                                <div className="absolute bottom-3 left-3 bg-red-500/80 text-white text-[10px] font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5">
+                                                    <MicOff className="w-3 h-3" />
+                                                    صامت
+                                                </div>
+                                            )}
+                                            {/* Mobile video controls */}
+                                            <div className="lg:hidden absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-3">
+                                                <button onClick={toggleMic} data-testid="button-mobile-toggle-mic" className={`p-3 rounded-full ${micOn ? 'bg-white/20' : 'bg-red-500'}`}>
+                                                    {micOn ? <Mic className="w-5 h-5 text-white" /> : <MicOff className="w-5 h-5 text-white" />}
+                                                </button>
+                                                <button onClick={toggleCam} data-testid="button-mobile-toggle-cam" className={`p-3 rounded-full ${camOn ? 'bg-white/20' : 'bg-red-500'}`}>
+                                                    {camOn ? <Camera className="w-5 h-5 text-white" /> : <CameraOff className="w-5 h-5 text-white" />}
+                                                </button>
+                                            </div>
                                         </div>
 
-                                        <div className="p-4 border-t border-white/[0.06] bg-white/[0.02]">
-                                            <div className="flex gap-2">
-                                                <input
-                                                    className="flex-1 bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-400/50 transition placeholder:text-white/20"
-                                                    placeholder="اكتب رسالة..."
-                                                    value={chatInput}
-                                                    onChange={e => setChatInput(e.target.value)}
-                                                    onKeyDown={e => e.key === 'Enter' && handleSendChat()}
-                                                />
-                                                <button
-                                                    onClick={handleSendChat}
-                                                    disabled={!chatInput.trim()}
-                                                    className="bg-gradient-to-l from-blue-500 to-indigo-600 px-5 rounded-xl font-black text-sm shadow-lg shadow-blue-500/20 disabled:opacity-30 transition"
-                                                >
-                                                    <Send className="w-5 h-5" />
-                                                </button>
+                                        {/* Chat Panel */}
+                                        <div className="flex-1 flex flex-col min-w-0">
+                                            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                                {chatMessages.map(msg => (
+                                                    <div key={msg.id} className={`flex ${msg.from === 'doctor' ? 'justify-start' : msg.from === 'system' ? 'justify-center' : 'justify-end'}`}>
+                                                        {msg.from === 'system' ? (
+                                                            <div className="bg-white/5 text-white/30 text-[10px] px-4 py-1.5 rounded-full font-bold">
+                                                                {msg.text}
+                                                            </div>
+                                                        ) : (
+                                                            <div className={`max-w-[85%] ${msg.from === 'doctor' ? 'bg-blue-500/20 border border-blue-500/10' : 'bg-white/[0.08] border border-white/[0.06]'} rounded-2xl p-3`}>
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className={`text-[10px] font-black ${msg.from === 'doctor' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                                                                        {msg.from === 'doctor' ? 'أنت' : msg.name || 'المريض'}
+                                                                    </span>
+                                                                    <span className="text-[9px] text-white/20">{msg.time}</span>
+                                                                </div>
+                                                                <p className="text-sm leading-relaxed">{msg.text}</p>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                                <div ref={chatEndRef} />
+                                            </div>
+
+                                            <div className="p-4 border-t border-white/[0.06] bg-white/[0.02]">
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        className="flex-1 bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-400/50 transition placeholder:text-white/20"
+                                                        placeholder="اكتب رسالة..."
+                                                        value={chatInput}
+                                                        onChange={e => setChatInput(e.target.value)}
+                                                        onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                                                        data-testid="input-doctor-chat"
+                                                    />
+                                                    <button
+                                                        onClick={handleSendChat}
+                                                        disabled={!chatInput.trim()}
+                                                        data-testid="button-doctor-send-chat"
+                                                        className="bg-gradient-to-l from-blue-500 to-indigo-600 px-5 rounded-xl font-black text-sm shadow-lg shadow-blue-500/20 disabled:opacity-30 transition"
+                                                    >
+                                                        <Send className="w-5 h-5" />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
