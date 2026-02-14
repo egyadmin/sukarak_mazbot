@@ -118,7 +118,7 @@ const ReportsView = () => {
         if (!filteredReadings || filteredReadings.length === 0) return;
         setExporting(true);
         try {
-            await exportHealthReport(filteredReadings, period, insight);
+            await exportHealthReport(filteredReadings, period, insight, lang);
         } catch (err) {
             console.error('Export error:', err);
         } finally {

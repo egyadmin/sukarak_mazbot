@@ -985,13 +985,11 @@ export function exportDashboardReport(stats, reports, format, isRTL) {
  * Uses html2canvas for native Arabic support
  * ══════════════════════════════════════════
  */
-export async function exportHealthReport(readings, period, insight) {
-    const { default: html2canvas } = await import('html2canvas');
-
-    // Period labels
-    const periodLabel = period === 'week' ? 'أسبوع' : period === 'month' ? 'شهر' : '3 أشهر';
-
-    // Stats
+export async function exportHealthReport(readings, period, insight, lang = 'ar') {
+    const isRTL = lang === 'ar';
+    const html2canvas = (await import('html2canvas')).default;
+    const jsPDF = (await import('jspdf')).default;
+    
     const avg = readings.length > 0 ? Math.round(readings.reduce((s, r) => s + r.reading, 0) / readings.length) : 0;
     const maxR = readings.length > 0 ? Math.max(...readings.map(r => r.reading)) : 0;
     const minR = readings.length > 0 ? Math.min(...readings.map(r => r.reading)) : 0;
@@ -999,94 +997,99 @@ export async function exportHealthReport(readings, period, insight) {
     const normalPct = readings.length > 0 ? Math.round((normalCount / readings.length) * 100) : 0;
     const highCount = readings.filter(r => r.reading > 140).length;
     const lowCount = readings.filter(r => r.reading < 70).length;
+    const periodLabel = period === 'week' ? (isRTL ? 'أسبوع' : 'Week') : period === 'month' ? (isRTL ? 'شهر' : 'Month') : (isRTL ? '3 أشهر' : '3 Months');
 
-    const statusText = avg < 70 ? 'منخفض - يحتاج مراجعة' :
-        avg <= 120 ? 'ممتاز - في المعدل الطبيعي' :
-            avg <= 180 ? 'مرتفع قليلاً - يحتاج متابعة' :
-                'مرتفع - يجب مراجعة الطبيب فوراً';
+    const statusText = avg < 70 ? (isRTL ? 'منخفض - يحتاج مراجعة' : 'Low - Needs Review') :
+        avg <= 120 ? (isRTL ? 'ممتاز - في المعدل الطبيعي' : 'Excellent - Within Normal Range') :
+            avg <= 180 ? (isRTL ? 'مرتفع قليلاً - يحتاج متابعة' : 'Slightly High - Needs Follow-up') :
+                (isRTL ? 'مرتفع - يجب مراجعة الطبيب فوراً' : 'High - Must Consult Doctor Immediately');
+    
     const statusColor = avg < 70 ? '#f59e0b' : avg <= 120 ? '#10b981' : avg <= 180 ? '#f59e0b' : '#ef4444';
 
-    const typeMap = { 'fasting': 'صائم', 'after_meal': 'بعد الأكل', 'random': 'عشوائي', 'before_meal': 'قبل الأكل' };
+    const typeMap = isRTL ? 
+        { 'fasting': 'صائم', 'after_meal': 'بعد الأكل', 'random': 'عشوائي', 'before_meal': 'قبل الأكل' } :
+        { 'fasting': 'Fasting', 'after_meal': 'After Meal', 'random': 'Random', 'before_meal': 'Before Meal' };
+
     const now = new Date();
-    const dateStr = `${now.toLocaleDateString('ar-EG')} - ${now.toLocaleTimeString('ar-EG')}`;
+    const dateStr = isRTL ? `${now.toLocaleDateString('ar-EG')} - ${now.toLocaleTimeString('ar-EG')}` : `${now.toLocaleDateString('en-US')} - ${now.toLocaleTimeString('en-US')}`;
 
     // Build HTML
     const container = document.createElement('div');
-    container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;font-family:Cairo,Tahoma,Arial,sans-serif;direction:rtl;padding:0;';
+    container.style.cssText = `position:fixed;left:-9999px;top:0;width:794px;background:#fff;font-family:Cairo,Tahoma,Arial,sans-serif;direction:${isRTL ? 'rtl' : 'ltr'};padding:0;`;
     container.innerHTML = `
         <div style="background:linear-gradient(135deg,#166f50,#0d9488);padding:28px 30px;color:#fff;">
             <div style="display:flex;justify-content:space-between;align-items:center;">
                 <div>
-                    <div style="font-size:24px;font-weight:900;">🩺 سُكّرك مظبوط</div>
-                    <div style="font-size:11px;opacity:0.8;margin-top:4px;">نظام إدارة الصحة الذكي - v3.0</div>
+                    <div style="font-size:24px;font-weight:900;">${isRTL ? '🩺 سُكّرك مظبوط' : '🩺 Sukarak Mazboot'}</div>
+                    <div style="font-size:11px;opacity:0.8;margin-top:4px;">${isRTL ? 'نظام إدارة الصحة الذكي - v3.0' : 'Smart Health Management System - v3.0'}</div>
                 </div>
-                <div style="text-align:left;font-size:10px;opacity:0.7;">
-                    <div>تاريخ التصدير</div>
+                <div style="text-align:${isRTL ? 'left' : 'right'};font-size:10px;opacity:0.7;">
+                    <div>${isRTL ? 'تاريخ التصدير' : 'Export Date'}</div>
                     <div style="font-weight:700;">${dateStr}</div>
                 </div>
             </div>
         </div>
         <div style="padding:24px 30px;">
-            <h2 style="font-size:20px;font-weight:900;color:#1e293b;margin:0 0 4px 0;">📋 تقرير متابعة السكر</h2>
-            <p style="font-size:12px;color:#94a3b8;margin:0 0 20px 0;">فترة التقرير: ${periodLabel} — ${readings.length} قراءة</p>
+            <h2 style="font-size:20px;font-weight:900;color:#1e293b;margin:0 0 4px 0;">${isRTL ? '📋 تقرير متابعة السكر' : '📋 Sugar Monitoring Report'}</h2>
+            <p style="font-size:12px;color:#94a3b8;margin:0 0 20px 0;">${isRTL ? 'فترة التقرير' : 'Report Period'}: ${periodLabel} — ${readings.length} ${isRTL ? 'قراءة' : 'readings'}</p>
             
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
                 <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;text-align:center;">
                     <div style="font-size:28px;font-weight:900;color:#166f50;">${avg}</div>
-                    <div style="font-size:10px;color:#6b7280;font-weight:700;">المتوسط (mg/dL)</div>
+                    <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'المتوسط (mg/dL)' : 'Average (mg/dL)'}</div>
                 </div>
                 <div style="background:#fef3c7;border:1px solid #fde68a;border-radius:12px;padding:14px;text-align:center;">
                     <div style="font-size:28px;font-weight:900;color:#d97706;">${maxR}</div>
-                    <div style="font-size:10px;color:#6b7280;font-weight:700;">أعلى قراءة</div>
+                    <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'أعلى قراءة' : 'Highest Reading'}</div>
                 </div>
                 <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:14px;text-align:center;">
                     <div style="font-size:28px;font-weight:900;color:#2563eb;">${minR}</div>
-                    <div style="font-size:10px;color:#6b7280;font-weight:700;">أقل قراءة</div>
+                    <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'أقل قراءة' : 'Lowest Reading'}</div>
                 </div>
             </div>
 
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;text-align:center;">
                     <div style="font-size:22px;font-weight:900;color:#10b981;">${normalPct}%</div>
-                    <div style="font-size:10px;color:#6b7280;font-weight:700;">طبيعية (${normalCount})</div>
+                    <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'طبيعية' : 'Normal'} (${normalCount})</div>
                 </div>
                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;text-align:center;">
                     <div style="font-size:22px;font-weight:900;color:#ef4444;">${highCount}</div>
-                    <div style="font-size:10px;color:#6b7280;font-weight:700;">مرتفعة</div>
+                    <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'مرتفعة' : 'High'}</div>
                 </div>
                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;text-align:center;">
                     <div style="font-size:22px;font-weight:900;color:#f59e0b;">${lowCount}</div>
-                    <div style="font-size:10px;color:#6b7280;font-weight:700;">منخفضة</div>
+                    <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'منخفضة' : 'Low'}</div>
                 </div>
             </div>
 
             <div style="background:${statusColor};color:#fff;padding:12px 18px;border-radius:12px;font-weight:900;font-size:14px;margin-bottom:20px;text-align:center;">
-                التقييم العام: ${statusText}
+                ${isRTL ? 'التقييم العام' : 'Overall Assessment'}: ${statusText}
             </div>
 
             ${insight ? `
             <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px;margin-bottom:20px;">
-                <div style="font-size:13px;font-weight:900;color:#166f50;margin-bottom:6px;">🤖 تحليل الذكاء الاصطناعي</div>
+                <div style="font-size:13px;font-weight:900;color:#166f50;margin-bottom:6px;">🤖 ${isRTL ? 'تحليل الذكاء الاصطناعي' : 'AI Analysis'}</div>
                 <div style="font-size:11px;color:#475569;line-height:1.7;">${insight}</div>
             </div>` : ''}
 
-            <h3 style="font-size:14px;font-weight:900;color:#1e293b;margin:0 0 10px 0;">📊 سجل القراءات</h3>
+            <h3 style="font-size:14px;font-weight:900;color:#1e293b;margin:0 0 10px 0;">📊 ${isRTL ? 'سجل القراءات' : 'Readings Log'}</h3>
             <table style="width:100%;border-collapse:collapse;font-size:11px;">
                 <thead>
                     <tr style="background:#166f50;color:#fff;">
-                        <th style="padding:10px 8px;text-align:right;font-weight:700;border-radius:8px 0 0 0;">#</th>
-                        <th style="padding:10px 8px;text-align:right;font-weight:700;">التاريخ والوقت</th>
-                        <th style="padding:10px 8px;text-align:right;font-weight:700;">نوع الفحص</th>
-                        <th style="padding:10px 8px;text-align:center;font-weight:700;">القراءة</th>
-                        <th style="padding:10px 8px;text-align:center;font-weight:700;border-radius:0 8px 0 0;">الحالة</th>
+                        <th style="padding:10px 8px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;border-radius:${isRTL ? '8px 0 0 0' : '0 8px 0 0'};">#</th>
+                        <th style="padding:10px 8px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التاريخ والوقت' : 'Date & Time'}</th>
+                        <th style="padding:10px 8px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'نوع الفحص' : 'Test Type'}</th>
+                        <th style="padding:10px 8px;text-align:center;font-weight:700;">${isRTL ? 'القراءة' : 'Reading'}</th>
+                        <th style="padding:10px 8px;text-align:center;font-weight:700;border-radius:${isRTL ? '0 8px 0 0' : '8px 0 0 0'};">${isRTL ? 'الحالة' : 'Status'}</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${readings.map((r, i) => {
-        const st = r.reading < 70 ? 'منخفض' : r.reading <= 140 ? 'طبيعي' : r.reading <= 200 ? 'مرتفع' : 'مرتفع جداً';
+        const st = r.reading < 70 ? (isRTL ? 'منخفض' : 'Low') : r.reading <= 140 ? (isRTL ? 'طبيعي' : 'Normal') : r.reading <= 200 ? (isRTL ? 'مرتفع' : 'High') : (isRTL ? 'مرتفع جداً' : 'Very High');
         const stBg = r.reading < 70 ? '#fef3c7' : r.reading <= 140 ? '#d1fae5' : r.reading <= 200 ? '#fee2e2' : '#fecaca';
         const stColor = r.reading < 70 ? '#d97706' : r.reading <= 140 ? '#059669' : '#ef4444';
-        const dateS = r.created_at ? new Date(r.created_at).toLocaleString('ar-EG', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+        const dateS = r.created_at ? new Date(r.created_at).toLocaleString(isRTL ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
         const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
         return `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
                             <td style="padding:9px 8px;font-weight:700;color:#94a3b8;">${i + 1}</td>
@@ -1101,8 +1104,8 @@ export async function exportHealthReport(readings, period, insight) {
         </div>
         <div style="border-top:2px solid #10b981;padding:12px 30px;display:flex;justify-content:space-between;color:#94a3b8;font-size:9px;">
             <span>sukarak-mazboot.com</span>
-            <span>© ${now.getFullYear()} سُكّرك مظبوط - جميع الحقوق محفوظة</span>
-            <span>صفحة 1</span>
+            <span>© ${now.getFullYear()} ${isRTL ? 'سُكّرك مظبوط - جميع الحقوق محفوظة' : 'Sukarak Mazboot - All Rights Reserved'}</span>
+            <span>${isRTL ? 'صفحة 1' : 'Page 1'}</span>
         </div>
     `;
     document.body.appendChild(container);
@@ -1126,7 +1129,7 @@ export async function exportHealthReport(readings, period, insight) {
         });
 
         doc.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
-        doc.save('تقرير_السكر_' + new Date().toISOString().split('T')[0] + '.pdf');
+        doc.save((isRTL ? 'تقرير_السكر_' : 'Sugar_Report_') + new Date().toISOString().split('T')[0] + '.pdf');
     } finally {
         document.body.removeChild(container);
     }
