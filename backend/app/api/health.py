@@ -295,13 +295,15 @@ def approve_session(appt_id: int, db: Session = Depends(get_db)):
     appt.session_request = "approved"
     appt.status = "in_progress"
     
-    # Send notification to patient
     from app.models.activity import ActivityLog
     notif = ActivityLog(
         user_id=appt.patient_id,
-        activity_type="session_approved",
-        description=f"تمت الموافقة على طلب الجلسة مع {appt.doctor_name or 'الطبيب'}. يمكنك الدخول الآن.",
-        metadata={"appt_id": appt.id, "room_id": appt.session_room_id}
+        user_name=appt.doctor_name or "الطبيب",
+        action="session_approved",
+        entity_type="appointment",
+        entity_id=appt.id,
+        entity_name=f"جلسة #{appt.id}",
+        details=f"تمت الموافقة على طلب الجلسة مع {appt.doctor_name or 'الطبيب'}. يمكنك الدخول الآن. room_id={appt.session_room_id}",
     )
     db.add(notif)
     
@@ -952,6 +954,8 @@ def get_doctor_appointments(doctor_id: int = 0, db: Session = Depends(get_db)):
         "notes": a.notes,
         "duration_minutes": a.duration_minutes,
         "created_at": a.created_at.isoformat() if a.created_at else None,
+        "session_request": a.session_request or "none",
+        "session_room_id": a.session_room_id,
     } for a in appts]
 
 # ═══════════════════════════════════════════════════════

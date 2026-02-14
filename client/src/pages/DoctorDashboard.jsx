@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Calendar, Users, MessageSquare, Activity, Clock, Video, Phone, Check, X,
     Bell, Settings, LogOut, ChevronLeft, ChevronRight, Loader2, FileText,
@@ -36,6 +36,15 @@ const DoctorDashboard = () => {
     const [patientSearch, setPatientSearch] = useState('');
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [toast, setToast] = useState('');
+
+    const [activeConsultation, setActiveConsultation] = useState(null);
+    const [chatMessages, setChatMessages] = useState([]);
+    const [chatInput, setChatInput] = useState('');
+    const [consultTimer, setConsultTimer] = useState(0);
+    const [patientJoined, setPatientJoined] = useState(false);
+    const timerRef = useRef(null);
+    const chatEndRef = useRef(null);
+    const wsRef = useRef(null);
 
     // Settings state
     const [settingsSection, setSettingsSection] = useState('profile');
@@ -128,20 +137,20 @@ const DoctorDashboard = () => {
             const res = await fetch(`${API_BASE}/health/appointments/${id}/approve-session`, { method: 'PUT' });
             if (res.ok) {
                 const data = await res.json();
-                showToast('تم قبول طلب الجلسة - يمكنك الانضمام الآن');
+                showToast('تم قبول طلب الجلسة - جاري الدخول...');
                 if (doctor) loadData(doctor.id);
-                
-                // Navigate to the session if room_id is available
-                if (data.room_id) {
-                    // We need a way to trigger the session view. 
-                    // Since DoctorDashboard doesn't have a separate "In Session" view in the provided snippet,
-                    // we'll assume it's handled by state or navigation.
-                    // For now, let's update the active consultation state if it existed, 
-                    // but looking at the code, it seems the doctor might need to be "in" a session tab.
-                    // Let's check if there's a consultation UI.
-                }
+                const sessionReq = sessionRequests.find(r => r.id === id);
+                const appt = appointments.find(a => a.id === id);
+                startConsultation({
+                    id: id,
+                    room_id: data.room_id,
+                    patient_name: data.patient_name || sessionReq?.patient_name || appt?.patient_name || 'المريض',
+                    appointment_type: sessionReq?.appointment_type || appt?.appointment_type || 'chat',
+                });
+            } else {
+                showToast('حدث خطأ في قبول الجلسة');
             }
-        } catch (err) { console.error(err); }
+        } catch (err) { console.error(err); showToast('حدث خطأ في الاتصال'); }
     };
 
     const handleRejectSession = async (id) => {
@@ -152,12 +161,119 @@ const DoctorDashboard = () => {
         } catch (err) { console.error(err); }
     };
 
+    const connectWebSocket = (roomId) => {
+        if (!doctor) return;
+        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}${API_BASE}/chat/ws/${doctor.id}?name=${encodeURIComponent(doctor.name || 'الطبيب')}`;
+        const ws = new WebSocket(wsUrl);
+        wsRef.current = ws;
+        ws.onopen = () => {
+            ws.send(JSON.stringify({ type: 'join_room', room_id: roomId }));
+        };
+        ws.onmessage = (e) => {
+            const msg = JSON.parse(e.data);
+            if (msg.type === 'chat_message') {
+                setChatMessages(prev => [...prev, {
+                    id: Date.now(),
+                    from: String(msg.user_id) === String(doctor.id) ? 'doctor' : 'patient',
+                    name: msg.name,
+                    text: msg.text,
+                    time: new Date(msg.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+                }]);
+            }
+            if (msg.type === 'room_history') {
+                setChatMessages(prev => {
+                    const history = msg.messages.map(m => ({
+                        id: m.timestamp,
+                        from: String(m.user_id) === String(doctor.id) ? 'doctor' : 'patient',
+                        name: m.name,
+                        text: m.text,
+                        time: new Date(m.timestamp).toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' })
+                    }));
+                    return [...prev.filter(m => m.from === 'system'), ...history];
+                });
+                if (msg.messages && msg.messages.some(m => String(m.user_id) !== String(doctor.id))) {
+                    setPatientJoined(true);
+                }
+            }
+            if (msg.type === 'user_joined' && String(msg.user_id) !== String(doctor.id)) {
+                setPatientJoined(true);
+            }
+        };
+        ws.onclose = () => { wsRef.current = null; };
+    };
+
+    const startConsultation = (apptData) => {
+        const roomId = apptData.room_id || apptData.session_room_id;
+        if (!roomId) {
+            showToast('خطأ: لا يوجد رابط جلسة. حاول مرة أخرى.');
+            return;
+        }
+        if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        setActiveConsultation({ ...apptData, room_id: roomId });
+        setPatientJoined(false);
+        setChatMessages([{ id: 1, from: 'system', text: `بدأت الجلسة مع ${apptData.patient_name || 'المريض'}`, time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }]);
+        setConsultTimer(0);
+        timerRef.current = setInterval(() => setConsultTimer(t => t + 1), 1000);
+        connectWebSocket(roomId);
+        setActiveTab('consultation');
+    };
+
+    const handleEndConsultation = async () => {
+        if (timerRef.current) clearInterval(timerRef.current);
+        if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
+        if (activeConsultation?.id) {
+            try { await fetch(`${API_BASE}/health/appointments/${activeConsultation.id}/end-session`, { method: 'PUT' }); } catch { }
+        }
+        setActiveConsultation(null);
+        setChatMessages([]);
+        setConsultTimer(0);
+        setPatientJoined(false);
+        setChatInput('');
+        setActiveTab('sessions');
+        if (doctor) loadData(doctor.id);
+        showToast('تم إنهاء الجلسة بنجاح');
+    };
+
+    const handleSendChat = () => {
+        if (!chatInput.trim()) return;
+        if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN && activeConsultation) {
+            wsRef.current.send(JSON.stringify({
+                type: 'chat_message',
+                room_id: activeConsultation.room_id || activeConsultation.session_room_id,
+                text: chatInput
+            }));
+        } else {
+            setChatMessages(prev => [...prev, { id: Date.now(), from: 'doctor', name: doctor?.name, text: chatInput, time: new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' }) }]);
+        }
+        setChatInput('');
+    };
+
+    useEffect(() => {
+        chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, [chatMessages]);
+
+    useEffect(() => {
+        return () => {
+            if (wsRef.current) wsRef.current.close();
+            if (timerRef.current) clearInterval(timerRef.current);
+        };
+    }, []);
+
+    const formatTimer = (sec) => {
+        const m = Math.floor(sec / 60).toString().padStart(2, '0');
+        const s = (sec % 60).toString().padStart(2, '0');
+        return `${m}:${s}`;
+    };
+
     const glass = 'bg-white/[0.06] backdrop-blur-xl border border-white/[0.08] shadow-2xl';
 
+    const activeSessCount = appointments.filter(a => a.session_request === 'approved' && a.status === 'in_progress').length;
     const sideItems = [
         { id: 'dashboard', label: 'الرئيسية', icon: Home },
         { id: 'appointments', label: 'المواعيد', icon: Calendar, badge: pendingAppts.length },
-        { id: 'sessions', label: 'طلبات الجلسات', icon: Video, badge: sessionRequests.filter(r => r.session_request === 'pending').length },
+        { id: 'sessions', label: 'الجلسات', icon: Video, badge: sessionRequests.filter(r => r.session_request === 'pending').length + activeSessCount },
+        ...(activeConsultation ? [{ id: 'consultation', label: 'جلسة نشطة', icon: MessageSquare, badge: 0, highlight: true }] : []),
         { id: 'patients', label: 'المرضى', icon: Users },
         { id: 'settings', label: 'الإعدادات', icon: Settings },
     ];
@@ -185,7 +301,7 @@ const DoctorDashboard = () => {
                 </div>
                 <nav className="flex-1 p-4 space-y-1">
                     {sideItems.map(s => (
-                        <button key={s.id} onClick={() => { setActiveTab(s.id); setMobileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition ${activeTab === s.id ? 'bg-gradient-to-l from-blue-500/20 to-indigo-500/10 text-blue-400 shadow-lg shadow-blue-500/5' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'}`}>
+                        <button key={s.id} onClick={() => { setActiveTab(s.id); setMobileMenu(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition ${s.highlight ? 'bg-gradient-to-l from-emerald-500/20 to-teal-500/10 text-emerald-400 shadow-lg shadow-emerald-500/5 animate-pulse' : activeTab === s.id ? 'bg-gradient-to-l from-blue-500/20 to-indigo-500/10 text-blue-400 shadow-lg shadow-blue-500/5' : 'text-white/30 hover:text-white/50 hover:bg-white/[0.03]'}`}>
                             <s.icon className="w-5 h-5" /> {s.label}
                             {s.badge > 0 && <span className="mr-auto bg-red-500 text-white text-[9px] px-2 py-0.5 rounded-full font-black">{s.badge}</span>}
                         </button>
@@ -359,6 +475,41 @@ const DoctorDashboard = () => {
                         {/* ═══════ SESSION REQUESTS ═══════ */}
                         {activeTab === 'sessions' && (
                             <div className="space-y-6">
+                                {/* Active sessions (approved, can rejoin) */}
+                                {(() => {
+                                    const activeSessions = appointments.filter(a => a.session_request === 'approved' && a.status === 'in_progress');
+                                    if (activeSessions.length === 0) return null;
+                                    return (
+                                        <div className="space-y-3">
+                                            <h3 className="text-lg font-black flex items-center gap-2">
+                                                <span className="w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse" />
+                                                جلسات نشطة
+                                            </h3>
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {activeSessions.map(sess => (
+                                                    <div key={sess.id} className={`${glass} rounded-3xl p-6 border-emerald-500/20`}>
+                                                        <div className="flex items-center gap-4 mb-4">
+                                                            <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center font-black text-xl">
+                                                                {sess.patient_name?.[0]}
+                                                            </div>
+                                                            <div>
+                                                                <p className="font-black text-lg">{sess.patient_name}</p>
+                                                                <p className="text-emerald-400/60 text-xs">جلسة نشطة - {sess.appointment_type === 'chat' ? 'محادثة' : 'فيديو'}</p>
+                                                            </div>
+                                                        </div>
+                                                        <button
+                                                            onClick={() => startConsultation({ id: sess.id, room_id: sess.session_room_id, patient_name: sess.patient_name, appointment_type: sess.appointment_type })}
+                                                            className="w-full py-3 bg-gradient-to-l from-emerald-500 to-teal-600 rounded-2xl text-sm font-black shadow-lg shadow-emerald-500/20 active:scale-95 transition flex items-center justify-center gap-2"
+                                                        >
+                                                            <Video className="w-4 h-4" /> الانضمام للجلسة
+                                                        </button>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    );
+                                })()}
+
                                 <h3 className="text-xl font-black">طلبات بدء الجلسات الحالية</h3>
                                 {sessionRequests.length === 0 ? (
                                     <div className={`${glass} rounded-3xl p-16 text-center`}>
@@ -401,6 +552,83 @@ const DoctorDashboard = () => {
                                         ))}
                                     </div>
                                 )}
+                            </div>
+                        )}
+
+                        {/* ═══════ ACTIVE CONSULTATION ═══════ */}
+                        {activeTab === 'consultation' && activeConsultation && (
+                            <div className="space-y-4">
+                                <div className={`${glass} rounded-3xl overflow-hidden`}>
+                                    <div className="bg-gradient-to-l from-emerald-600 to-teal-600 p-4 flex flex-wrap items-center justify-between gap-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center font-black text-lg">
+                                                {activeConsultation.patient_name?.[0] || '?'}
+                                            </div>
+                                            <div>
+                                                <p className="font-black text-sm">{activeConsultation.patient_name}</p>
+                                                <div className="flex items-center gap-2 text-[10px] text-white/60">
+                                                    <span className="flex items-center gap-1">
+                                                        <span className={`w-2 h-2 rounded-full ${patientJoined ? 'bg-green-300 animate-pulse' : 'bg-white/30'}`} />
+                                                        {patientJoined ? 'المريض متصل' : 'بانتظار المريض'}
+                                                    </span>
+                                                    <span>|</span>
+                                                    <Clock className="w-3 h-3" />
+                                                    <span className="font-mono">{formatTimer(consultTimer)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={handleEndConsultation}
+                                            className="flex items-center gap-2 bg-red-500/80 hover:bg-red-500 px-4 py-2 rounded-xl text-xs font-black transition"
+                                        >
+                                            <PhoneOff className="w-4 h-4" /> إنهاء الجلسة
+                                        </button>
+                                    </div>
+
+                                    <div className="flex flex-col h-[calc(100vh-320px)] min-h-[400px]">
+                                        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                                            {chatMessages.map(msg => (
+                                                <div key={msg.id} className={`flex ${msg.from === 'doctor' ? 'justify-start' : msg.from === 'system' ? 'justify-center' : 'justify-end'}`}>
+                                                    {msg.from === 'system' ? (
+                                                        <div className="bg-white/5 text-white/30 text-[10px] px-4 py-1.5 rounded-full font-bold">
+                                                            {msg.text}
+                                                        </div>
+                                                    ) : (
+                                                        <div className={`max-w-[75%] ${msg.from === 'doctor' ? 'bg-blue-500/20 border border-blue-500/10' : 'bg-white/[0.08] border border-white/[0.06]'} rounded-2xl p-3`}>
+                                                            <div className="flex items-center gap-2 mb-1">
+                                                                <span className={`text-[10px] font-black ${msg.from === 'doctor' ? 'text-blue-400' : 'text-emerald-400'}`}>
+                                                                    {msg.from === 'doctor' ? 'أنت' : msg.name || 'المريض'}
+                                                                </span>
+                                                                <span className="text-[9px] text-white/20">{msg.time}</span>
+                                                            </div>
+                                                            <p className="text-sm leading-relaxed">{msg.text}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                            <div ref={chatEndRef} />
+                                        </div>
+
+                                        <div className="p-4 border-t border-white/[0.06] bg-white/[0.02]">
+                                            <div className="flex gap-2">
+                                                <input
+                                                    className="flex-1 bg-white/[0.05] border border-white/[0.1] rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-blue-400/50 transition placeholder:text-white/20"
+                                                    placeholder="اكتب رسالة..."
+                                                    value={chatInput}
+                                                    onChange={e => setChatInput(e.target.value)}
+                                                    onKeyDown={e => e.key === 'Enter' && handleSendChat()}
+                                                />
+                                                <button
+                                                    onClick={handleSendChat}
+                                                    disabled={!chatInput.trim()}
+                                                    className="bg-gradient-to-l from-blue-500 to-indigo-600 px-5 rounded-xl font-black text-sm shadow-lg shadow-blue-500/20 disabled:opacity-30 transition"
+                                                >
+                                                    <Send className="w-5 h-5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         )}
 
@@ -497,6 +725,13 @@ const DoctorDashboard = () => {
                                                                     <button onClick={() => handleComplete(appt.id)} className="bg-gradient-to-l from-blue-500 to-indigo-600 px-5 py-2 rounded-xl text-xs font-black shadow-lg">✔️ إنهاء الجلسة</button>
                                                                     <button onClick={() => handleCancel(appt.id)} className="bg-white/[0.05] px-5 py-2 rounded-xl text-xs font-black text-red-400">❌ إلغاء</button>
                                                                 </>}
+                                                                {appt.status === 'in_progress' && appt.session_request === 'approved' && appt.session_room_id && (
+                                                                    <>
+                                                                        <button onClick={() => startConsultation({ id: appt.id, room_id: appt.session_room_id, patient_name: appt.patient_name, appointment_type: appt.appointment_type })} className="bg-gradient-to-l from-emerald-500 to-teal-600 px-5 py-2 rounded-xl text-xs font-black shadow-lg flex items-center gap-1"><Video className="w-3.5 h-3.5" /> انضمام للجلسة</button>
+                                                                        <button onClick={() => handleComplete(appt.id)} className="bg-white/[0.05] px-5 py-2 rounded-xl text-xs font-black text-amber-400">✔️ إنهاء</button>
+                                                                        <button onClick={() => handleCancel(appt.id)} className="bg-white/[0.05] px-5 py-2 rounded-xl text-xs font-black text-red-400">❌ إلغاء</button>
+                                                                    </>
+                                                                )}
                                                             </div>
                                                         </div>
                                                     )}

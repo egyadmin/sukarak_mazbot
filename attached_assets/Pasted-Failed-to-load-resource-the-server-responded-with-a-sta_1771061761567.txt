@@ -1,0 +1,34 @@
+Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+ed2a41ca-2dff-4ff5-841c-14fd6eeee565-00-4hj8ucvy1tr6.riker.replit.dev/api/v1/health/appointments/12/approve-session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+ed2a41ca-2dff-4ff5-841c-14fd6eeee565-00-4hj8ucvy1tr6.riker.replit.dev/api/v1/health/appointments/12/approve-session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+ed2a41ca-2dff-4ff5-841c-14fd6eeee565-00-4hj8ucvy1tr6.riker.replit.dev/api/v1/health/appointments/12/approve-session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+ed2a41ca-2dff-4ff5-841c-14fd6eeee565-00-4hj8ucvy1tr6.riker.replit.dev/api/v1/health/appointments/12/approve-session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+ed2a41ca-2dff-4ff5-841c-14fd6eeee565-00-4hj8ucvy1tr6.riker.replit.dev/api/v1/health/appointments/12/approve-session:1  Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+2056d9e9f43c5dbc.js:14 task queue exceeded allotted deadline by 107ms
+(anonymous) @ 2056d9e9f43c5dbc.js:14
+_process @ 14a0a7d4b60ddaca.js:6
+(anonymous) @ 14a0a7d4b60ddaca.js:6
+r @ 2056d9e9f43c5dbc.js:14
+setTimeout
+(anonymous) @ 2056d9e9f43c5dbc.js:14
+_requestCallback @ 14a0a7d4b60ddaca.js:6
+_start @ 14a0a7d4b60ddaca.js:6
+enqueue @ 14a0a7d4b60ddaca.js:6
+_doWarmUp @ 14a0a7d4b60ddaca.js:10
+warmUp @ 14a0a7d4b60ddaca.js:10
+_refreshCharAtlas @ 14a0a7d4b60ddaca.js:67
+resize @ 14a0a7d4b60ddaca.js:67
+resize @ 14a0a7d4b60ddaca.js:67
+handleResize @ 14a0a7d4b60ddaca.js:67
+handleDevicePixelRatioChange @ 14a0a7d4b60ddaca.js:67
+handleDevicePixelRatioChange @ c5b8ddf38898dd14.js:14
+(anonymous) @ c5b8ddf38898dd14.js:14
+_deliver @ c5b8ddf38898dd14.js:12
+_deliverQueue @ c5b8ddf38898dd14.js:12
+fire @ c5b8ddf38898dd14.js:12
+(anonymous) @ c5b8ddf38898dd14.js:8
+_deliver @ c5b8ddf38898dd14.js:12
+fire @ c5b8ddf38898dd14.js:12
+_setDprAndFireIfDiffers @ c5b8ddf38898dd14.js:14
+(anonymous) @ c5b8ddf38898dd14.js:14
+r @ 2056d9e9f43c5dbc.js:14Understand this warning
