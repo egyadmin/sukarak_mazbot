@@ -61,7 +61,7 @@ const MarketView = () => {
             .then(data => { setProducts(data); setLoading(false); })
             .catch(() => setLoading(false));
 
-        fetch(`${API_BASE}/admin/cms/banners`)
+        fetch(`${API_BASE}/admin/cms/banners?section=store`)
             .then(res => res.json())
             .then(data => setBanners(data.filter(b => b.active)))
             .catch(() => { });
@@ -229,7 +229,7 @@ const MarketView = () => {
                         <Heart className={`w-5 h-5 ${favorites.length > 0 ? 'fill-red-500 text-red-500' : 'text-gray-400'}`} />
                     </button>
                 </div>
-                <h2 className="text-lg font-black text-primary-dark">{lang === 'ar' ? 'المتجر' : 'Store'}</h2>
+                <h2 className="text-lg font-black text-primary-dark">{lang === 'ar' ? 'منتجات العناية بالسكري' : 'Diabetes Care Products'}</h2>
                 <button className="bg-white border border-gray-100 p-2.5 rounded-2xl shadow-sm active:scale-95 transition">
                     <Search className="w-5 h-5 text-gray-400" />
                 </button>
@@ -246,6 +246,49 @@ const MarketView = () => {
                     className="w-full bg-white border border-gray-100 rounded-2xl py-3 pr-10 pl-4 text-sm outline-none focus:border-emerald-300 transition shadow-sm"
                 />
             </div>
+
+            {/* Banner Carousel */}
+            {banners.length > 0 && (
+                <div className="relative rounded-3xl overflow-hidden shadow-lg">
+                    <AnimatePresence mode="wait">
+                        <motion.div
+                            key={currentBanner}
+                            initial={{ opacity: 0, x: 40 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -40 }}
+                            transition={{ duration: 0.4 }}
+                            className="w-full"
+                        >
+                            {banners[currentBanner]?.image_url ? (
+                                <a href={banners[currentBanner].link || '#'} target="_blank" rel="noopener noreferrer">
+                                    <img
+                                        src={banners[currentBanner].image_url}
+                                        alt={banners[currentBanner].title || 'Banner'}
+                                        className="w-full h-auto object-contain rounded-3xl"
+                                        onError={(e) => { e.target.style.display = 'none'; }}
+                                    />
+                                </a>
+                            ) : (
+                                <div className="w-full py-12 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-3xl flex items-center justify-center">
+                                    <span className="text-white font-bold text-lg">{banners[currentBanner]?.title || '🛒'}</span>
+                                </div>
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
+                    {/* Banner dots */}
+                    {banners.length > 1 && (
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1.5">
+                            {banners.map((_, idx) => (
+                                <button
+                                    key={idx}
+                                    onClick={() => setCurrentBanner(idx)}
+                                    className={`w-2 h-2 rounded-full transition-all ${idx === currentBanner ? 'bg-white w-5' : 'bg-white/50'}`}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            )}
 
             {/* Category Grid */}
             <div className="grid grid-cols-2 gap-3">

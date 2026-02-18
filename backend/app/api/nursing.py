@@ -11,7 +11,7 @@ from datetime import datetime
 import random
 
 from app.db.session import SessionLocal
-from app.models.services import NursingService, NursingBooking
+from app.models.services import NursingService, NursingBooking, NursingSchedule
 from app.models.user import User
 
 router = APIRouter()
@@ -366,3 +366,155 @@ def delete_nurse(nurse_id: int, db: Session = Depends(get_db)):
     db.delete(nurse)
     db.commit()
     return {"status": "deleted"}
+
+
+# ════════════════════════════════════════
+# SCHEDULE MANAGEMENT (date-based)
+# ════════════════════════════════════════
+
+class ScheduleCreate(BaseModel):
+    nurse_id: int
+    date: str           # YYYY-MM-DD
+    start_time: str     # HH:MM
+    end_time: str       # HH:MM
+    notes: Optional[str] = None
+
+
+class ScheduleUpdate(BaseModel):
+    date: Optional[str] = None
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    is_available: Optional[bool] = None
+    notes: Optional[str] = None
+
+
+@router.get("/schedules")
+def list_schedules(nurse_id: Optional[int] = None, date: Optional[str] = None, db: Session = Depends(get_db)):
+    """List all schedules, optionally filtered by nurse or date."""
+    q = db.query(NursingSchedule)
+    if nurse_id:
+        q = q.filter(NursingSchedule.nurse_id == nurse_id)
+    if date:
+        q = q.filter(NursingSchedule.date == date)
+    slots = q.order_by(NursingSchedule.date, NursingSchedule.start_time).all()
+    result = []
+    for s in slots:
+        nurse = db.query(User).filter(User.id == s.nurse_id).first()
+        result.append({
+            "id": s.id,
+            "nurse_id": s.nurse_id,
+            "nurse_name": nurse.name if nurse else "",
+            "date": s.date,
+            "start_time": s.start_time,
+            "end_time": s.end_time,
+            "is_available": s.is_available,
+            "notes": s.notes,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        })
+    return result
+
+
+@router.post("/schedules")
+def create_schedule(data: ScheduleCreate, db: Session = Depends(get_db)):
+    """Add a new available time slot for a nurse."""
+    nurse = db.query(User).filter(User.id == data.nurse_id, User.role == "nurse").first()
+    if not nurse:
+        raise HTTPException(status_code=404, detail="Nurse not found")
+
+    slot = NursingSchedule(
+        nurse_id=data.nurse_id,
+        date=data.date,
+        start_time=data.start_time,
+        end_time=data.end_time,
+        is_available=True,
+        notes=data.notes,
+    )
+    db.add(slot)
+    db.commit()
+    db.refresh(slot)
+    return {"status": "success", "id": slot.id}
+
+
+@router.post("/schedules/bulk")
+def create_bulk_schedules(data: dict, db: Session = Depends(get_db)):
+    """Add multiple time slots at once (for a whole week, etc)."""
+    nurse_id = data.get("nurse_id")
+    slots_data = data.get("slots", [])
+    nurse = db.query(User).filter(User.id == nurse_id, User.role == "nurse").first()
+    if not nurse:
+        raise HTTPException(status_code=404, detail="Nurse not found")
+
+    created = []
+    for s in slots_data:
+        slot = NursingSchedule(
+            nurse_id=nurse_id,
+            date=s.get("date"),
+            start_time=s.get("start_time"),
+            end_time=s.get("end_time"),
+            is_available=True,
+            notes=s.get("notes"),
+        )
+        db.add(slot)
+        created.append(slot)
+    db.commit()
+    return {"status": "success", "count": len(created)}
+
+
+@router.put("/schedules/{slot_id}")
+def update_schedule(slot_id: int, data: ScheduleUpdate, db: Session = Depends(get_db)):
+    """Update a schedule slot."""
+    slot = db.query(NursingSchedule).filter(NursingSchedule.id == slot_id).first()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot not found")
+    for field in ['date', 'start_time', 'end_time', 'is_available', 'notes']:
+        val = getattr(data, field, None)
+        if val is not None:
+            setattr(slot, field, val)
+    db.commit()
+    return {"status": "updated"}
+
+
+@router.delete("/schedules/{slot_id}")
+def delete_schedule(slot_id: int, db: Session = Depends(get_db)):
+    """Delete a schedule slot."""
+    slot = db.query(NursingSchedule).filter(NursingSchedule.id == slot_id).first()
+    if not slot:
+        raise HTTPException(status_code=404, detail="Slot not found")
+    db.delete(slot)
+    db.commit()
+    return {"status": "deleted"}
+
+
+@router.get("/available-slots")
+def get_available_slots(date: Optional[str] = None, db: Session = Depends(get_db)):
+    """Get available time slots for the app booking view.
+    Returns available nurse slots for a given date or upcoming dates."""
+    q = db.query(NursingSchedule).filter(NursingSchedule.is_available == True)
+    if date:
+        q = q.filter(NursingSchedule.date == date)
+    else:
+        today = datetime.now().strftime("%Y-%m-%d")
+        q = q.filter(NursingSchedule.date >= today)
+
+    slots = q.order_by(NursingSchedule.date, NursingSchedule.start_time).all()
+
+    # Check which slots are already booked
+    result = []
+    for s in slots:
+        booked = db.query(NursingBooking).filter(
+            NursingBooking.date == s.date,
+            NursingBooking.time == s.start_time,
+            NursingBooking.nurse_name != None,
+            NursingBooking.status.in_(["pending", "confirmed"]),
+        ).first()
+        if not booked:
+            nurse = db.query(User).filter(User.id == s.nurse_id).first()
+            result.append({
+                "id": s.id,
+                "nurse_id": s.nurse_id,
+                "nurse_name": nurse.name if nurse else "",
+                "date": s.date,
+                "start_time": s.start_time,
+                "end_time": s.end_time,
+            })
+    return result

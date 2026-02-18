@@ -34,17 +34,38 @@ const ProfileView = () => {
     const [privacySaved, setPrivacySaved] = useState(false);
     const [exporting, setExporting] = useState(false);
     const [medicalFile, setMedicalFile] = useState({
-        smoker: false, daily_sport: false, medications: '', meals_count: 3, attachments: []
+        smoker: false, daily_sport: false, medications: '', meals_count: 3, attachments: [],
+        diabetes_type: '', diagnosis_date: '', blood_type: '', hba1c: '', insulin_type: '',
+        allergies: '', chronic_diseases: '', height: '', emergency_contact: '', notes: ''
     });
+    const medicalFileRef = useRef(null);
     const [favorites, setFavorites] = useState([]);
     const [returns, setReturns] = useState([]);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [deleting, setDeleting] = useState(false);
 
     useEffect(() => {
-        fetch(`${API_BASE}/membership/favorites`).then(r => r.ok ? r.json() : []).then(setFavorites).catch(() => { });
+        // Load favorites from localStorage (same source as MarketView)
+        const savedFavIds = JSON.parse(localStorage.getItem('sukarak_favs') || '[]').map(Number);
+        if (savedFavIds.length > 0) {
+            fetch(`${API_BASE}/market/products`)
+                .then(r => r.ok ? r.json() : [])
+                .then(data => {
+                    // Handle both array and {data: [...]} formats
+                    const products = Array.isArray(data) ? data : (data?.data || data?.products || []);
+                    const favProducts = products.filter(p => savedFavIds.includes(Number(p.id)));
+                    setFavorites(favProducts.map(p => ({
+                        id: p.id,
+                        name: p.title || p.name,
+                        product_name: p.title || p.name,
+                        price: p.offer_price || p.price,
+                        image: p.img_url || p.image
+                    })));
+                })
+                .catch(() => { });
+        }
         fetch(`${API_BASE}/membership/medical-profile`).then(r => r.ok ? r.json() : null).then(d => { if (d) setMedicalFile(d); }).catch(() => { });
-    }, []);
+    }, [activePanel]);
 
     useEffect(() => { loadProfile(); }, []);
 
@@ -155,6 +176,26 @@ const ProfileView = () => {
                     </button>
                 </div>
                 <h2 className="mt-3 text-2xl font-black text-primary-dark">{profile?.name || '--'}</h2>
+                {(() => {
+                    const role = localStorage.getItem('sukarak_user_role') || 'user';
+                    const roleMap = {
+                        admin: { label: lang === 'ar' ? '🛡️ مسؤول النظام' : '🛡️ Admin', color: 'bg-red-100 text-red-700', link: '/admin' },
+                        doctor: { label: lang === 'ar' ? '👨‍⚕️ طبيب' : '👨‍⚕️ Doctor', color: 'bg-blue-100 text-blue-700', link: '/doctor' },
+                        seller: { label: lang === 'ar' ? '🏪 بائع' : '🏪 Seller', color: 'bg-amber-100 text-amber-700', link: '/seller' },
+                        nurse: { label: lang === 'ar' ? '👩‍⚕️ ممرض/ة' : '👩‍⚕️ Nurse', color: 'bg-pink-100 text-pink-700', link: '/nursing-admin' },
+                        lab: { label: lang === 'ar' ? '🧪 فني مختبر' : '🧪 Lab Tech', color: 'bg-indigo-100 text-indigo-700', link: '/lab-admin' },
+                        user: { label: lang === 'ar' ? '👤 مستخدم' : '👤 User', color: 'bg-gray-100 text-gray-600', link: null },
+                    };
+                    const r = roleMap[role] || roleMap.user;
+                    return (
+                        <div className="flex items-center gap-2 mt-1">
+                            <span className={`px-3 py-1 rounded-full text-[11px] font-black ${r.color}`}>{r.label}</span>
+                            {r.link && <button onClick={() => navigate(r.link)} className="text-[10px] text-primary-emerald font-bold underline">
+                                {lang === 'ar' ? 'لوحة التحكم ←' : 'Dashboard →'}
+                            </button>}
+                        </div>
+                    );
+                })()}
                 <p className="text-gray-400 text-sm">{profile?.email}</p>
                 <p className="text-gray-300 text-xs mt-0.5">
                     {lang === 'ar' ? 'عضو منذ' : 'Member since'} {profile?.created_at ? new Date(profile.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { year: 'numeric', month: 'long' }) : '--'}
@@ -260,7 +301,67 @@ const ProfileView = () => {
                                 {/* Medical File Panel */}
                                 {activePanel === 'medical' && (
                                     <>
+                                        <input type="file" ref={medicalFileRef} accept="image/*,.pdf,.doc,.docx" className="hidden" onChange={async (e) => {
+                                            const file = e.target.files?.[0];
+                                            if (!file) return;
+                                            const reader = new FileReader();
+                                            reader.onload = () => {
+                                                setMedicalFile(p => ({ ...p, attachments: [...(p.attachments || []), { name: file.name, size: file.size, type: file.type, preview: reader.result, date: new Date().toISOString() }] }));
+                                            };
+                                            reader.readAsDataURL(file);
+                                        }} />
                                         <div className="space-y-4">
+                                            {/* Diabetes Type */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'نوع السكري' : 'Diabetes Type'}</label>
+                                                <div className="flex gap-2">
+                                                    {[
+                                                        { key: 'type1', label: lang === 'ar' ? 'النوع الأول' : 'Type 1' },
+                                                        { key: 'type2', label: lang === 'ar' ? 'النوع الثاني' : 'Type 2' },
+                                                        { key: 'gestational', label: lang === 'ar' ? 'سكري الحمل' : 'Gestational' },
+                                                    ].map(t => (
+                                                        <button key={t.key} onClick={() => setMedicalFile(p => ({ ...p, diabetes_type: t.key }))}
+                                                            className={`flex-1 py-2.5 rounded-xl font-bold text-xs transition-all ${medicalFile.diabetes_type === t.key ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-400'}`}>{t.label}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {/* Diagnosis Date */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'تاريخ التشخيص' : 'Diagnosis Date'}</label>
+                                                <input type="date" value={medicalFile.diagnosis_date || ''} onChange={e => setMedicalFile(p => ({ ...p, diagnosis_date: e.target.value }))}
+                                                    className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none" />
+                                            </div>
+                                            {/* Blood Type */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'فصيلة الدم' : 'Blood Type'}</label>
+                                                <div className="grid grid-cols-4 gap-2">
+                                                    {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map(bt => (
+                                                        <button key={bt} onClick={() => setMedicalFile(p => ({ ...p, blood_type: bt }))}
+                                                            className={`py-2 rounded-xl font-bold text-xs transition-all ${medicalFile.blood_type === bt ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-400'}`}>{bt}</button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                            {/* HbA1c & Height */}
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'آخر سكر تراكمي (HbA1c)' : 'Last HbA1c'}</label>
+                                                    <input type="number" step="0.1" value={medicalFile.hba1c || ''} onChange={e => setMedicalFile(p => ({ ...p, hba1c: e.target.value }))}
+                                                        placeholder="6.5%" className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none" />
+                                                </div>
+                                                <div>
+                                                    <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'الطول (سم)' : 'Height (cm)'}</label>
+                                                    <input type="number" value={medicalFile.height || ''} onChange={e => setMedicalFile(p => ({ ...p, height: e.target.value }))}
+                                                        placeholder="170" className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none" />
+                                                </div>
+                                            </div>
+                                            {/* Insulin Type */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'نوع الأنسولين المستخدم' : 'Insulin Type Used'}</label>
+                                                <input type="text" value={medicalFile.insulin_type || ''} onChange={e => setMedicalFile(p => ({ ...p, insulin_type: e.target.value }))}
+                                                    placeholder={lang === 'ar' ? 'مثال: لانتوس، نوفورابيد...' : 'e.g., Lantus, NovoRapid...'}
+                                                    className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none" />
+                                            </div>
+                                            {/* Smoker & Daily Sport toggles */}
                                             <div className="flex items-center justify-between bg-gray-50 p-4 rounded-2xl">
                                                 <div className="flex items-center gap-3">
                                                     <Cigarette className="w-5 h-5 text-gray-400" />
@@ -281,12 +382,28 @@ const ProfileView = () => {
                                                     <div className={`w-5 h-5 bg-white rounded-full absolute top-1 transition-all ${medicalFile.daily_sport ? 'right-1' : 'left-1'}`} />
                                                 </button>
                                             </div>
+                                            {/* Allergies */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'الحساسية' : 'Allergies'}</label>
+                                                <textarea value={medicalFile.allergies || ''} onChange={e => setMedicalFile(p => ({ ...p, allergies: e.target.value }))}
+                                                    placeholder={lang === 'ar' ? 'أي حساسية من أدوية أو أطعمة...' : 'Any allergies to medications or food...'}
+                                                    rows={2} className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none resize-none" />
+                                            </div>
+                                            {/* Chronic Diseases */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'الأمراض المزمنة الأخرى' : 'Other Chronic Diseases'}</label>
+                                                <textarea value={medicalFile.chronic_diseases || ''} onChange={e => setMedicalFile(p => ({ ...p, chronic_diseases: e.target.value }))}
+                                                    placeholder={lang === 'ar' ? 'ضغط، كوليسترول، قلب...' : 'Hypertension, cholesterol, heart...'}
+                                                    rows={2} className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none resize-none" />
+                                            </div>
+                                            {/* Current Medications */}
                                             <div>
                                                 <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'الأدوية الحالية' : 'Current Medications'}</label>
                                                 <textarea value={medicalFile.medications || ''} onChange={e => setMedicalFile(p => ({ ...p, medications: e.target.value }))}
                                                     placeholder={lang === 'ar' ? 'اكتب أدويتك الحالية...' : 'List your medications...'}
                                                     rows={3} className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none resize-none" />
                                             </div>
+                                            {/* Daily Meals */}
                                             <div>
                                                 <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'عدد الوجبات اليومية' : 'Daily Meals'}</label>
                                                 <div className="flex gap-2">
@@ -295,6 +412,55 @@ const ProfileView = () => {
                                                             className={`flex-1 py-3 rounded-xl font-black text-xs transition-all ${medicalFile.meals_count === n ? 'bg-teal-500 text-white' : 'bg-gray-100 text-gray-400'}`}>{n}</button>
                                                     ))}
                                                 </div>
+                                            </div>
+                                            {/* Emergency Contact */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'رقم الطوارئ (قريب)' : 'Emergency Contact'}</label>
+                                                <input type="tel" value={medicalFile.emergency_contact || ''} onChange={e => setMedicalFile(p => ({ ...p, emergency_contact: e.target.value }))}
+                                                    placeholder={lang === 'ar' ? 'رقم هاتف شخص قريب...' : 'Emergency phone number...'}
+                                                    className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none" />
+                                            </div>
+                                            {/* Notes */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'ملاحظات إضافية' : 'Additional Notes'}</label>
+                                                <textarea value={medicalFile.notes || ''} onChange={e => setMedicalFile(p => ({ ...p, notes: e.target.value }))}
+                                                    placeholder={lang === 'ar' ? 'أي ملاحظات أخرى ترغب بإضافتها...' : 'Any other notes...'}
+                                                    rows={2} className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-teal-400 outline-none resize-none" />
+                                            </div>
+                                            {/* Attachments Section */}
+                                            <div>
+                                                <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'المرفقات (تقارير، تحاليل، صور)' : 'Attachments (reports, tests, images)'}</label>
+                                                <button onClick={() => medicalFileRef.current?.click()}
+                                                    className="w-full border-2 border-dashed border-teal-300 bg-teal-50/50 p-4 rounded-2xl flex flex-col items-center gap-2 hover:bg-teal-50 transition active:scale-[0.98]">
+                                                    <Paperclip className="w-6 h-6 text-teal-400" />
+                                                    <span className="text-xs font-bold text-teal-600">{lang === 'ar' ? 'اضغط لإرفاق ملف أو صورة' : 'Click to attach file or image'}</span>
+                                                    <span className="text-[10px] text-gray-400">{lang === 'ar' ? 'PDF, صور, مستندات' : 'PDF, Images, Documents'}</span>
+                                                </button>
+                                                {medicalFile.attachments?.length > 0 && (
+                                                    <div className="mt-3 space-y-2">
+                                                        {medicalFile.attachments.map((att, i) => (
+                                                            <div key={i} className="bg-gray-50 p-3 rounded-xl flex items-center justify-between">
+                                                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                                    {att.type?.startsWith('image/') && att.preview ? (
+                                                                        <img src={att.preview} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                                                                    ) : (
+                                                                        <div className="w-10 h-10 bg-teal-100 rounded-lg flex items-center justify-center">
+                                                                            <FileText className="w-5 h-5 text-teal-500" />
+                                                                        </div>
+                                                                    )}
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <p className="text-xs font-bold text-gray-700 truncate">{att.name}</p>
+                                                                        <p className="text-[10px] text-gray-400">{(att.size / 1024).toFixed(1)} KB</p>
+                                                                    </div>
+                                                                </div>
+                                                                <button onClick={() => setMedicalFile(p => ({ ...p, attachments: p.attachments.filter((_, idx) => idx !== i) }))}
+                                                                    className="p-1.5 hover:bg-red-100 rounded-lg transition">
+                                                                    <X className="w-4 h-4 text-red-400" />
+                                                                </button>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
                                         <button onClick={async () => {
@@ -343,6 +509,46 @@ const ProfileView = () => {
                                             <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'الهاتف' : 'Phone'}</label>
                                             <input type="tel" value={editData.phone ?? profile?.phone ?? ''} onChange={e => setEditData(p => ({ ...p, phone: e.target.value }))}
                                                 className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-primary-emerald outline-none" />
+                                        </div>
+                                        {/* Age */}
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'العمر' : 'Age'}</label>
+                                            <input type="number" min="1" max="120" value={editData.age ?? profile?.age ?? ''} onChange={e => setEditData(p => ({ ...p, age: e.target.value }))}
+                                                placeholder={lang === 'ar' ? 'العمر بالسنوات' : 'Age in years'}
+                                                className="w-full bg-gray-50 p-3.5 rounded-2xl text-sm font-bold border-2 border-transparent focus:border-primary-emerald outline-none" />
+                                        </div>
+                                        {/* Gender */}
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'الجنس' : 'Gender'}</label>
+                                            <div className="flex gap-2">
+                                                {[
+                                                    { key: 'male', label: lang === 'ar' ? '👨 ذكر' : '👨 Male', color: 'bg-blue-500' },
+                                                    { key: 'female', label: lang === 'ar' ? '👩 أنثى' : '👩 Female', color: 'bg-pink-500' },
+                                                ].map(g => (
+                                                    <button key={g.key} onClick={() => setEditData(p => ({ ...p, gender: g.key }))}
+                                                        className={`flex-1 py-3 rounded-2xl font-bold text-sm transition-all ${(editData.gender ?? profile?.gender) === g.key ? `${g.color} text-white shadow-lg` : 'bg-gray-100 text-gray-400'}`}>
+                                                        {g.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                        {/* Body Shape */}
+                                        <div>
+                                            <label className="text-xs font-bold text-gray-400 mb-2 block">{lang === 'ar' ? 'شكل الجسم' : 'Body Shape'}</label>
+                                            <div className="grid grid-cols-4 gap-2">
+                                                {[
+                                                    { key: 'thin', emoji: '🧍', label: lang === 'ar' ? 'نحيف' : 'Thin', color: 'bg-sky-500' },
+                                                    { key: 'normal', emoji: '🧑', label: lang === 'ar' ? 'طبيعي' : 'Normal', color: 'bg-emerald-500' },
+                                                    { key: 'overweight', emoji: '🏋️', label: lang === 'ar' ? 'زائد الوزن' : 'Overweight', color: 'bg-amber-500' },
+                                                    { key: 'obese', emoji: '⚖️', label: lang === 'ar' ? 'سمنة' : 'Obese', color: 'bg-red-500' },
+                                                ].map(bs => (
+                                                    <button key={bs.key} onClick={() => setEditData(p => ({ ...p, body_shape: bs.key }))}
+                                                        className={`flex flex-col items-center gap-1 py-3 rounded-2xl font-bold text-[10px] transition-all ${(editData.body_shape ?? profile?.body_shape) === bs.key ? `${bs.color} text-white shadow-lg` : 'bg-gray-100 text-gray-400'}`}>
+                                                        <span className="text-2xl">{bs.emoji}</span>
+                                                        <span>{bs.label}</span>
+                                                    </button>
+                                                ))}
+                                            </div>
                                         </div>
                                         <button onClick={async () => {
                                             setSaving(true);

@@ -3,7 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Mail, Lock, User, Eye, EyeOff, Loader2, ArrowRight,
-    Chrome, Shield, KeyRound, Phone, ChevronLeft
+    Chrome, Shield, KeyRound, Phone, ChevronLeft, Calendar, Scale,
+    Globe, MapPin, Users
 } from 'lucide-react';
 import { API_BASE } from '../api/config';
 
@@ -28,10 +29,48 @@ const LoginPage = ({ onLogin }) => {
     const [regEmail, setRegEmail] = useState('');
     const [regPhone, setRegPhone] = useState('');
     const [regPass, setRegPass] = useState('');
+    const [regAge, setRegAge] = useState('');
+    const [regWeight, setRegWeight] = useState('');
+    const [regCountry, setRegCountry] = useState('');
+    const [regCity, setRegCity] = useState('');
+    const [regGender, setRegGender] = useState('');
+
+    const arabCountries = [
+        { code: 'EG', ar: 'مصر', en: 'Egypt' },
+        { code: 'SA', ar: 'السعودية', en: 'Saudi Arabia' },
+        { code: 'AE', ar: 'الإمارات', en: 'UAE' },
+        { code: 'KW', ar: 'الكويت', en: 'Kuwait' },
+        { code: 'QA', ar: 'قطر', en: 'Qatar' },
+        { code: 'BH', ar: 'البحرين', en: 'Bahrain' },
+        { code: 'OM', ar: 'عُمان', en: 'Oman' },
+        { code: 'JO', ar: 'الأردن', en: 'Jordan' },
+        { code: 'LB', ar: 'لبنان', en: 'Lebanon' },
+        { code: 'IQ', ar: 'العراق', en: 'Iraq' },
+        { code: 'SY', ar: 'سوريا', en: 'Syria' },
+        { code: 'PS', ar: 'فلسطين', en: 'Palestine' },
+        { code: 'YE', ar: 'اليمن', en: 'Yemen' },
+        { code: 'LY', ar: 'ليبيا', en: 'Libya' },
+        { code: 'TN', ar: 'تونس', en: 'Tunisia' },
+        { code: 'DZ', ar: 'الجزائر', en: 'Algeria' },
+        { code: 'MA', ar: 'المغرب', en: 'Morocco' },
+        { code: 'SD', ar: 'السودان', en: 'Sudan' },
+        { code: 'SO', ar: 'الصومال', en: 'Somalia' },
+        { code: 'MR', ar: 'موريتانيا', en: 'Mauritania' },
+        { code: 'DJ', ar: 'جيبوتي', en: 'Djibouti' },
+        { code: 'KM', ar: 'جزر القمر', en: 'Comoros' },
+    ];
 
     // OTP
     const [otpCode, setOtpCode] = useState('');
     const [otpPreview, setOtpPreview] = useState('');
+
+    const roleRedirects = {
+        admin: '/admin',
+        doctor: '/doctor',
+        seller: '/seller',
+        nurse: '/nursing-admin',
+        lab: '/lab-admin',
+    };
 
     const saveUser = (data) => {
         localStorage.setItem('sukarak_token', data.access_token);
@@ -41,7 +80,20 @@ const LoginPage = ({ onLogin }) => {
         localStorage.setItem('sukarak_user_role', data.user.role || 'user');
         if (data.user.phone) localStorage.setItem('sukarak_user_phone', data.user.phone);
         if (data.user.profile_image) localStorage.setItem('sukarak_user_image', data.user.profile_image);
+
+        // Mark first login for welcome message
+        if (data.is_new_user) {
+            localStorage.setItem('sukarak_show_welcome', 'true');
+        }
+
         onLogin(data.user);
+
+        // Redirect service providers to their dashboards
+        const role = data.user.role || 'user';
+        const redirect = roleRedirects[role];
+        if (redirect) {
+            setTimeout(() => { window.location.href = redirect; }, 100);
+        }
     };
 
     const handleLogin = async () => {
@@ -71,7 +123,7 @@ const LoginPage = ({ onLogin }) => {
     };
 
     const handleRegister = async () => {
-        if (!regName || !regEmail || !regPass) {
+        if (!regName || !regEmail || !regPass || !regPhone) {
             setError(lang === 'ar' ? 'الرجاء ملء جميع الحقول المطلوبة' : 'Please fill all required fields');
             return;
         }
@@ -109,7 +161,13 @@ const LoginPage = ({ onLogin }) => {
                     email: regEmail,
                     code: otpCode,
                     name: regName,
-                    password: regPass
+                    password: regPass,
+                    phone: regPhone,
+                    age: regAge,
+                    weight: regWeight,
+                    country: regCountry,
+                    city: regCity,
+                    gender: regGender,
                 })
             });
             const data = await res.json();
@@ -298,6 +356,14 @@ const LoginPage = ({ onLogin }) => {
                     >
                         {lang === 'ar' ? 'تطبيق إدارة السكري الذكي' : 'Smart Diabetes Management'}
                     </motion.p>
+                    <motion.p
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        transition={{ delay: 0.9 }}
+                        className="text-xs text-teal-200/30 font-semibold mt-1"
+                    >
+                        {lang === 'ar' ? 'صحتك تهمنا.. سكرك مضبوط' : 'Your health matters.. Sukarak Mazbot'}
+                    </motion.p>
                 </div>
 
                 {/* Main Card */}
@@ -416,9 +482,49 @@ const LoginPage = ({ onLogin }) => {
                                     </div>
                                     <div className="relative">
                                         <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
-                                        <input value={regPhone} onChange={e => setRegPhone(e.target.value)}
-                                            placeholder={lang === 'ar' ? 'رقم الهاتف (اختياري)' : 'Phone (optional)'}
+                                        <input value={regPhone} onChange={e => { setRegPhone(e.target.value); setError(''); }}
+                                            placeholder={lang === 'ar' ? 'رقم الهاتف *' : 'Phone *'}
                                             className="w-full bg-white/[0.06] border border-white/10 rounded-2xl pr-11 pl-4 py-4 text-white text-sm font-bold outline-none focus:border-teal-400/50 placeholder:text-white/20 transition" />
+                                    </div>
+                                    {/* Country Dropdown */}
+                                    <div className="relative">
+                                        <Globe className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                                        <select value={regCountry} onChange={e => setRegCountry(e.target.value)}
+                                            className="w-full bg-white/[0.06] border border-white/10 rounded-2xl pr-11 pl-4 py-4 text-sm font-bold outline-none focus:border-teal-400/50 transition appearance-none cursor-pointer"
+                                            style={{ color: regCountry ? '#fff' : 'rgba(255,255,255,0.2)' }}>
+                                            <option value="" className="bg-slate-800 text-white/40">{lang === 'ar' ? 'الدولة' : 'Country'}</option>
+                                            {arabCountries.map(c => (
+                                                <option key={c.code} value={c.code} className="bg-slate-800 text-white">
+                                                    {lang === 'ar' ? c.ar : c.en}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    {/* City */}
+                                    <div className="relative">
+                                        <MapPin className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                                        <input value={regCity} onChange={e => setRegCity(e.target.value)}
+                                            placeholder={lang === 'ar' ? 'البلد / المدينة' : 'City'}
+                                            className="w-full bg-white/[0.06] border border-white/10 rounded-2xl pr-11 pl-4 py-4 text-white text-sm font-bold outline-none focus:border-teal-400/50 placeholder:text-white/20 transition" />
+                                    </div>
+                                    <div className="flex gap-3">
+                                        {/* Age */}
+                                        <div className="relative flex-1">
+                                            <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                                            <input type="number" value={regAge} onChange={e => setRegAge(e.target.value)}
+                                                placeholder={lang === 'ar' ? 'العمر' : 'Age'}
+                                                min="1" max="120"
+                                                className="w-full bg-white/[0.06] border border-white/10 rounded-2xl pr-11 pl-4 py-4 text-white text-sm font-bold outline-none focus:border-teal-400/50 placeholder:text-white/20 transition" />
+                                        </div>
+                                        {/* Weight */}
+                                        <div className="relative flex-1">
+                                            <Scale className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />
+                                            <input type="number" value={regWeight} onChange={e => setRegWeight(e.target.value)}
+                                                placeholder={lang === 'ar' ? 'الوزن (كجم)' : 'Weight (kg)'}
+                                                min="1" max="300"
+                                                style={{ colorScheme: 'dark' }}
+                                                className="w-full bg-white/[0.06] border border-white/10 rounded-2xl pr-11 pl-4 py-4 text-white text-sm font-bold outline-none focus:border-teal-400/50 placeholder:text-white/20 transition" />
+                                        </div>
                                     </div>
                                     <div className="relative">
                                         <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-white/30" />

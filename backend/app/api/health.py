@@ -42,14 +42,30 @@ class ProfileUpdate(BaseModel):
 @router.get("/profile")
 def get_profile(user_id: int = 0, db: Session = Depends(get_db)):
     uid = user_id if user_id > 0 else DUMMY_USER_ID
-    user = db.query(User).filter(User.id == uid).first()
+    try:
+        user = db.query(User).filter(User.id == uid).first()
+    except Exception:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Database error querying user")
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Count health data
-    sugar_count = db.query(SugarReading).filter(SugarReading.user_id == uid).count()
-    drug_count = db.query(DrugRecord).filter(DrugRecord.user_id == uid).count()
-    appt_count = db.query(Appointment).filter(Appointment.patient_id == uid).count()
+    # Count health data - safely handle missing tables/columns
+    try:
+        sugar_count = db.query(SugarReading).filter(SugarReading.user_id == uid).count()
+    except Exception:
+        db.rollback()
+        sugar_count = 0
+    try:
+        drug_count = db.query(DrugRecord).filter(DrugRecord.user_id == uid).count()
+    except Exception:
+        db.rollback()
+        drug_count = 0
+    try:
+        appt_count = db.query(Appointment).filter(Appointment.patient_id == uid).count()
+    except Exception:
+        db.rollback()
+        appt_count = 0
     
     return {
         "id": user.id,
@@ -102,7 +118,7 @@ async def upload_profile_image(file: UploadFile = File(...), user_id: int = 0, d
     
     os.makedirs("media/profiles", exist_ok=True)
     ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-    filename = f"{uid}_{uuid.uuid4().hex[:8]}.{ext}"
+    filename = f"{uid}_{str(uuid.uuid4().hex)[:8]}.{ext}"
     filepath = f"media/profiles/{filename}"
     
     content = await file.read()
@@ -123,7 +139,8 @@ def create_sugar_reading(reading_in: SugarReadingCreate, db: Session = Depends(g
     db_obj = SugarReading(
         user_id=DUMMY_USER_ID,
         reading=reading_in.reading,
-        test_type=reading_in.test_type
+        test_type=reading_in.test_type,
+        unit=reading_in.unit or 'mg/dl'
     )
     if reading_in.measured_at:
         try:
@@ -172,9 +189,9 @@ def create_exercise_record(record_in: ExerciseRecordCreate, db: Session = Depend
 # APPOINTMENTS
 # ================================================
 class AppointmentCreate(BaseModel):
-    doctor_name: str
-    specialization: Optional[str] = None
-    appointment_type: str = "video"
+    doctor_id: int = 1
+    doctor_name: str = "الفريق الطبي"
+    appointment_type: str = "video"  # video, audio, chat
     scheduled_at: str  # ISO datetime string
     notes: Optional[str] = None
     duration_minutes: int = 30
@@ -201,13 +218,43 @@ def get_appointments(db: Session = Depends(get_db)):
 
 @router.post("/appointments")
 def create_appointment(data: AppointmentCreate, db: Session = Depends(get_db)):
+    """Book a new appointment. Status = pending (needs doctor approval). Includes slot locking."""
+    patient = db.query(User).filter(User.id == DUMMY_USER_ID).first()
+    try:
+        sched = datetime.fromisoformat(data.scheduled_at)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format")
+    
+    # ═══ SLOT LOCKING: Check for conflicting appointments ═══
+    from datetime import timedelta
+    slot_start = sched
+    slot_end = sched + timedelta(minutes=data.duration_minutes or 30)
+    
+    # Find any existing appointment for the same doctor that overlaps this time slot
+    conflicting = db.query(Appointment).filter(
+        Appointment.doctor_id == data.doctor_id,
+        Appointment.status.notin_(["cancelled", "completed"]),
+        Appointment.scheduled_at < slot_end,
+        # Check if existing appointment end time > new start time
+    ).all()
+    
+    for existing in conflicting:
+        existing_end = existing.scheduled_at + timedelta(minutes=existing.duration_minutes or 30)
+        if existing.scheduled_at < slot_end and existing_end > slot_start:
+            raise HTTPException(
+                status_code=409,
+                detail="هذا الموعد محجوز بالفعل. يرجى اختيار وقت آخر."
+            )
+    # ═══ END SLOT LOCKING ═══
+    
     appt = Appointment(
-        doctor_id=1,  # Default doctor
+        doctor_id=data.doctor_id,
         patient_id=DUMMY_USER_ID,
         doctor_name=data.doctor_name,
-        patient_name="المستخدم",
+        patient_name=patient.name if patient else "مريض",
         appointment_type=data.appointment_type,
-        scheduled_at=datetime.fromisoformat(data.scheduled_at),
+        status="pending",
+        scheduled_at=sched,
         notes=data.notes,
         duration_minutes=data.duration_minutes,
     )
@@ -215,6 +262,54 @@ def create_appointment(data: AppointmentCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(appt)
     return {"status": "success", "id": appt.id}
+
+
+@router.get("/appointments/available-slots")
+def get_available_slots(doctor_id: int = 1, date: str = "", duration: int = 30, db: Session = Depends(get_db)):
+    """Get available appointment slots for a doctor on a given date. Respects slot locking."""
+    from datetime import timedelta
+    if not date:
+        date = datetime.now().strftime("%Y-%m-%d")
+    try:
+        base_date = datetime.strptime(date, "%Y-%m-%d")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    # Generate all possible 30-min slots from 09:00 to 17:00
+    all_slots = []
+    for hour in range(9, 17):
+        for minute in [0, 30]:
+            slot_start = base_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
+            all_slots.append(slot_start)
+
+    # Get existing appointments for this doctor on this date
+    day_start = base_date.replace(hour=0, minute=0, second=0)
+    day_end = base_date.replace(hour=23, minute=59, second=59)
+    existing = db.query(Appointment).filter(
+        Appointment.doctor_id == doctor_id,
+        Appointment.status.notin_(["cancelled"]),
+        Appointment.scheduled_at >= day_start,
+        Appointment.scheduled_at <= day_end,
+    ).all()
+
+    # Remove conflicting slots
+    available = []
+    for slot in all_slots:
+        slot_end = slot + timedelta(minutes=duration)
+        is_free = True
+        for appt in existing:
+            appt_end = appt.scheduled_at + timedelta(minutes=appt.duration_minutes or 30)
+            if appt.scheduled_at < slot_end and appt_end > slot:
+                is_free = False
+                break
+        if is_free:
+            available.append({
+                "time": slot.strftime("%H:%M"),
+                "datetime": slot.isoformat(),
+                "available": True,
+            })
+
+    return {"date": date, "doctor_id": doctor_id, "slots": available, "total": len(available)}
 
 
 @router.put("/appointments/{appt_id}/cancel")
@@ -241,7 +336,7 @@ def request_session(appt_id: int, db: Session = Depends(get_db)):
             "room_id": appt.session_room_id,
             "message": "طلب الجلسة موجود بالفعل"
         }
-    room_id = f"session_{appt_id}_{uuid.uuid4().hex[:8]}"
+    room_id = f"session_{appt_id}_{str(uuid.uuid4().hex)[:8]}"
     appt.session_request = "pending"
     appt.session_room_id = room_id
     db.commit()
@@ -724,7 +819,9 @@ class DrugCreate(BaseModel):
     form: Optional[str] = None
     frequency: Optional[str] = None
     serving: Optional[str] = None
+    dosage_unit: Optional[str] = None
     concentration: Optional[str] = None
+    concentration_unit: Optional[str] = None
 
 
 @router.get("/drugs")
@@ -736,7 +833,9 @@ def get_drugs(db: Session = Depends(get_db)):
         "form": d.form,
         "frequency": d.frequency,
         "serving": d.serving,
+        "dosage_unit": d.dosage_unit,
         "concentration": d.concentration,
+        "concentration_unit": d.concentration_unit,
         "created_at": d.created_at.isoformat() if d.created_at else None,
     } for d in drugs]
 
@@ -749,7 +848,9 @@ def add_drug(data: DrugCreate, db: Session = Depends(get_db)):
         form=data.form,
         frequency=data.frequency,
         serving=data.serving,
+        dosage_unit=data.dosage_unit,
         concentration=data.concentration,
+        concentration_unit=data.concentration_unit,
     )
     db.add(drug)
     db.commit()
@@ -818,92 +919,7 @@ def get_doctors(db: Session = Depends(get_db)):
     } for d in doctors]
 
 
-# ════════════════════════════════════════
-# APPOINTMENTS
-# ════════════════════════════════════════
-class AppointmentCreate(BaseModel):
-    doctor_id: int
-    doctor_name: str
-    appointment_type: str = "video"  # video, audio, chat
-    scheduled_at: str  # ISO datetime
-    notes: Optional[str] = None
-    duration_minutes: int = 30
-
-@router.get("/appointments")
-def get_appointments(db: Session = Depends(get_db)):
-    """Get appointments for current user."""
-    appts = db.query(Appointment).filter(
-        Appointment.patient_id == DUMMY_USER_ID
-    ).order_by(Appointment.scheduled_at.desc()).all()
-    return [{
-        "id": a.id,
-        "doctor_id": a.doctor_id,
-        "doctor_name": a.doctor_name,
-        "patient_name": a.patient_name,
-        "appointment_type": a.appointment_type,
-        "status": a.status,
-        "scheduled_at": a.scheduled_at.isoformat() if a.scheduled_at else None,
-        "notes": a.notes,
-        "duration_minutes": a.duration_minutes,
-        "created_at": a.created_at.isoformat() if a.created_at else None,
-    } for a in appts]
-
-
-@router.post("/appointments")
-def create_appointment(data: AppointmentCreate, db: Session = Depends(get_db)):
-    """Book a new appointment. Status = pending (needs doctor approval)."""
-    patient = db.query(User).filter(User.id == DUMMY_USER_ID).first()
-    try:
-        sched = datetime.fromisoformat(data.scheduled_at)
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid date format")
-    
-    appt = Appointment(
-        doctor_id=data.doctor_id,
-        patient_id=DUMMY_USER_ID,
-        doctor_name=data.doctor_name,
-        patient_name=patient.name if patient else "مريض",
-        appointment_type=data.appointment_type,
-        status="pending",  # needs doctor approval
-        scheduled_at=sched,
-        notes=data.notes,
-        duration_minutes=data.duration_minutes,
-    )
-    db.add(appt)
-    db.commit()
-    db.refresh(appt)
-    return {"status": "success", "id": appt.id}
-
-
-@router.put("/appointments/{appt_id}/cancel")
-def cancel_appointment(appt_id: int, db: Session = Depends(get_db)):
-    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
-    if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    appt.status = "cancelled"
-    db.commit()
-    return {"status": "success"}
-
-
-@router.put("/appointments/{appt_id}/approve")
-def approve_appointment(appt_id: int, db: Session = Depends(get_db)):
-    """Doctor approves the appointment."""
-    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
-    if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    appt.status = "scheduled"
-    db.commit()
-    return {"status": "success"}
-
-
-@router.put("/appointments/{appt_id}/complete")
-def complete_appointment(appt_id: int, db: Session = Depends(get_db)):
-    appt = db.query(Appointment).filter(Appointment.id == appt_id).first()
-    if not appt:
-        raise HTTPException(status_code=404, detail="Appointment not found")
-    appt.status = "completed"
-    db.commit()
-    return {"status": "success"}
+# (Duplicate appointment routes removed - using the consolidated routes above with session management)
 
 
 # ════════════════════════════════════════

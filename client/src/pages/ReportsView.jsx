@@ -33,6 +33,7 @@ const ReportsView = () => {
     const [loading, setLoading] = useState(true);
     const [exporting, setExporting] = useState(false);
     const [activeTab, setActiveTab] = useState('sugar');
+    const [sugarTypeFilter, setSugarTypeFilter] = useState('all');
 
     useEffect(() => {
         loadData();
@@ -69,11 +70,21 @@ const ReportsView = () => {
         });
     };
 
-    const filteredReadings = filterByPeriod(readings);
+    const filteredByPeriodReadings = filterByPeriod(readings);
+    const filteredReadings = sugarTypeFilter === 'all' ? filteredByPeriodReadings : filteredByPeriodReadings.filter(r => r.test_type === sugarTypeFilter);
     const filteredDrugs = filterByPeriod(drugs);
     const filteredExercises = filterByPeriod(exercises);
     const filteredMeals = filterByPeriod(meals);
     const filteredInsulin = filterByPeriod(insulin);
+
+    const sugarTypeFilters = [
+        { key: 'all', label: lang === 'ar' ? 'الكل' : 'All' },
+        { key: 'fasting', label: lang === 'ar' ? 'صائم' : 'Fasting' },
+        { key: 'after_meal', label: lang === 'ar' ? 'بعد الأكل' : 'After Meal' },
+        { key: 'random', label: lang === 'ar' ? 'عشوائي' : 'Random' },
+        { key: 'before_meal', label: lang === 'ar' ? 'قبل الأكل' : 'Before Meal' },
+        { key: 'cumulative', label: lang === 'ar' ? 'تراكمي' : 'HbA1c' },
+    ];
 
     const chartData = [...filteredReadings].reverse().map(r => ({
         name: r.created_at ? new Date(r.created_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { day: 'numeric', month: 'short' }) : '--',
@@ -118,13 +129,19 @@ const ReportsView = () => {
         if (!filteredReadings || filteredReadings.length === 0) return;
         setExporting(true);
         try {
-            await exportHealthReport(filteredReadings, period, insight, lang);
+            await exportHealthReport(filteredReadings, period, insight, lang, {
+                drugs: filteredDrugs,
+                exercises: filteredExercises,
+                meals: filteredMeals,
+                insulin: filteredInsulin,
+            });
         } catch (err) {
             console.error('Export error:', err);
         } finally {
             setExporting(false);
         }
     };
+
 
     const totalExerciseMinutes = filteredExercises.reduce((s, e) => s + (e.duration || 0), 0);
     const totalCalories = filteredMeals.reduce((s, m) => s + (m.calories || 0), 0);
@@ -199,6 +216,15 @@ const ReportsView = () => {
                     {/* ============== SUGAR TAB ============== */}
                     {activeTab === 'sugar' && (
                         <div className="space-y-5">
+                            {/* Sugar Type Filter */}
+                            <div className="flex flex-wrap gap-1.5">
+                                {sugarTypeFilters.map(f => (
+                                    <button key={f.key} onClick={() => setSugarTypeFilter(f.key)}
+                                        className={`py-2 px-3 rounded-xl font-bold text-[10px] transition-all ${sugarTypeFilter === f.key ? 'bg-rose-500 text-white shadow-md' : 'bg-white text-gray-400 border border-gray-100'}`}>
+                                        {f.label}
+                                    </button>
+                                ))}
+                            </div>
                             {/* Normal Percentage */}
                             {filteredReadings.length > 0 && (
                                 <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-50">

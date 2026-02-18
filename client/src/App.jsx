@@ -24,6 +24,7 @@ import InsulinCalculator from './pages/InsulinCalculator';
 import MedicalTestsView from './pages/MedicalTestsView';
 import NursingView from './pages/NursingView';
 import NursingDashboard from './pages/NursingDashboard';
+import LabDashboard from './pages/LabDashboard';
 import MyOrdersView from './pages/MyOrdersView';
 import SellerDashboard from './pages/SellerDashboard';
 import BlogView from './pages/BlogView';
@@ -41,6 +42,7 @@ import RefundPolicyPage from './pages/RefundPolicyPage';
 import AboutUsPage from './pages/AboutUsPage';
 import ProtectedRoute from './components/auth/ProtectedRoute';
 import SessionNotificationOverlay from './components/SessionNotificationOverlay';
+import WelcomeOverlay from './components/WelcomeOverlay';
 
 function AppContent() {
     const { i18n } = useTranslation();
@@ -52,7 +54,8 @@ function AppContent() {
     const isDoctor = location.pathname.startsWith('/doctor');
     const isSeller = location.pathname.startsWith('/seller');
     const isNursingAdmin = location.pathname.startsWith('/nursing-admin');
-    const isPanel = isAdmin || isDoctor || isSeller || isNursingAdmin;
+    const isLabAdmin = location.pathname.startsWith('/lab-admin');
+    const isPanel = isAdmin || isDoctor || isSeller || isNursingAdmin || isLabAdmin;
 
     // Public routes that don't require login
     const publicPaths = ['/privacy-policy', '/terms', '/refund-policy', '/about-us', '/admin/login'];
@@ -105,6 +108,7 @@ function AppContent() {
                     className={`min-h-screen flex flex-col ${isPanel ? 'bg-gray-50' : 'bg-white'} overflow-x-hidden font-cairo`}
                 >
                     {!isPanel && <Navbar toggleLanguage={toggleLanguage} />}
+                    {!isPanel && <WelcomeOverlay />}
 
                     <main className={`flex-1 ${isPanel ? '' : 'pt-24 px-4 pb-24 max-w-lg mx-auto w-full'}`}>
                         <Routes>
@@ -135,29 +139,35 @@ function AppContent() {
                             <Route path="/terms" element={<TermsPage />} />
                             <Route path="/refund-policy" element={<RefundPolicyPage />} />
                             <Route path="/about-us" element={<AboutUsPage />} />
-                            
+
                             <Route path="/admin/*" element={
                                 <ProtectedRoute allowedRoles={['admin']}>
                                     <AdminDashboard />
                                 </ProtectedRoute>
                             } />
                             <Route path="/admin/login" element={<AdminLogin onLogin={() => window.location.href = '/admin'} />} />
-                            
+
                             <Route path="/doctor/*" element={
                                 <ProtectedRoute allowedRoles={['doctor', 'admin']}>
                                     <DoctorDashboard />
                                 </ProtectedRoute>
                             } />
-                            
+
                             <Route path="/seller/*" element={
                                 <ProtectedRoute allowedRoles={['seller', 'admin']}>
                                     <SellerDashboard />
                                 </ProtectedRoute>
                             } />
-                            
+
                             <Route path="/nursing-admin/*" element={
                                 <ProtectedRoute allowedRoles={['nurse', 'admin']}>
                                     <NursingDashboard />
+                                </ProtectedRoute>
+                            } />
+
+                            <Route path="/lab-admin/*" element={
+                                <ProtectedRoute allowedRoles={['lab', 'admin']}>
+                                    <LabDashboard />
                                 </ProtectedRoute>
                             } />
                         </Routes>

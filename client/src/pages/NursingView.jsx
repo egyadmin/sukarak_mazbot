@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, Plus, X, Check, MapPin, Calendar, Clock, Loader2, User, Phone, Search, Syringe, HeartPulse, Bandage, MoreHorizontal, ShoppingCart, CreditCard } from 'lucide-react';
+import { ArrowRight, Plus, X, Check, MapPin, Calendar, Clock, Loader2, User, Phone, Search, Syringe, HeartPulse, Bandage, MoreHorizontal, ShoppingCart, CreditCard, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { API_BASE } from '../api/config';
-import bannerImg from '@assets/nursing_banner.png';
+const bannerImg = null;
 
 const SERVICES_API = `${API_BASE}/services/nursing/services`;
 const BOOKINGS_API = `${API_BASE}/services/nursing/bookings`;
@@ -56,6 +56,9 @@ const NursingView = () => {
                 body: JSON.stringify({
                     service_id: showBook.id,
                     service_name: showBook.title,
+                    user_id: parseInt(localStorage.getItem('sukarak_user_id') || '0'),
+                    user_name: localStorage.getItem('sukarak_user_name') || '',
+                    user_phone: localStorage.getItem('sukarak_user_phone') || '',
                     date: form.date,
                     time: form.time,
                     address: form.address,
@@ -123,7 +126,7 @@ const NursingView = () => {
             </div>
 
             <div className="relative rounded-2xl overflow-hidden shadow-lg">
-                <img src={bannerImg} alt="Home Nursing" className="w-full h-44 object-cover" />
+                {bannerImg ? <img src={bannerImg} alt="Home Nursing" className="w-full h-44 object-cover" /> : <div className="w-full h-44 bg-gradient-to-br from-emerald-400 via-teal-500 to-cyan-600" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
                     <h3 className="text-lg font-black mb-1">{lang === 'ar' ? 'خدمات التمريض المنزلي' : 'Home Nursing Services'}</h3>
@@ -221,10 +224,17 @@ const NursingView = () => {
                                     {b.nurse_name && <span className="flex items-center gap-1"><User className="w-3 h-3" />{b.nurse_name}</span>}
                                 </div>
                                 {b.status !== 'cancelled' && b.status !== 'completed' && (
-                                    <button onClick={() => handleCancel(b.id)} className="mt-2 text-red-400 text-[11px] font-bold hover:text-red-600 transition"
-                                        data-testid={`button-cancel-booking-${b.id}`}>
-                                        {lang === 'ar' ? 'إلغاء الحجز' : 'Cancel'}
-                                    </button>
+                                    <div className="flex items-center gap-3 mt-2">
+                                        <button onClick={() => handleCancel(b.id)} className="text-red-400 text-[11px] font-bold hover:text-red-600 transition"
+                                            data-testid={`button-cancel-booking-${b.id}`}>
+                                            {lang === 'ar' ? 'إلغاء الحجز' : 'Cancel'}
+                                        </button>
+                                        <a href={`https://wa.me/201027696380?text=${encodeURIComponent(lang === 'ar' ? `استفسار عن حجز تمريض: ${b.service_name} بتاريخ ${b.date}` : `Query about nursing booking: ${b.service_name} on ${b.date}`)}`}
+                                            target="_blank" rel="noreferrer"
+                                            className="text-emerald-500 text-[11px] font-bold flex items-center gap-1 hover:text-emerald-700 transition">
+                                            <MessageCircle className="w-3 h-3" /> {lang === 'ar' ? 'واتساب' : 'WhatsApp'}
+                                        </a>
+                                    </div>
                                 )}
                             </motion.div>
                         ))}
@@ -245,6 +255,11 @@ const NursingView = () => {
                             {successData.price && (
                                 <p className="text-sm text-white/80 font-bold">{lang === 'ar' ? 'المبلغ: ' : 'Amount: '}{successData.price} {lang === 'ar' ? 'ر.س' : 'SAR'}</p>
                             )}
+                            <a href={`https://wa.me/201027696380?text=${encodeURIComponent(lang === 'ar' ? `مرحباً، قمت بحجز خدمة تمريض: ${successData.service_name} بتاريخ ${form.date}. أود تأكيد الموعد.` : `Hello, I booked a nursing service: ${successData.service_name}. I'd like to confirm the appointment.`)}`}
+                                target="_blank" rel="noreferrer"
+                                className="mt-2 bg-white/20 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                                <MessageCircle className="w-4 h-4" /> {lang === 'ar' ? 'تواصل عبر واتساب' : 'Contact via WhatsApp'}
+                            </a>
                         </div>
                     </motion.div>
                 )}

@@ -27,13 +27,13 @@ def seed_membership_data(db: Session):
                 discount_percent=5, icon="⭐", sort_order=1,
                 features_ar=json.dumps([
                     "خصم 5% على الخدمات المدفوعة",
-                    "اشتراك مجاني بالكورسات المجانية",
+                    "اشتراك مجاني في كورس السكري",
                     "تنبيهات ومتابعة دورية",
                     "نقاط تحفيزية على كل عملية شراء"
                 ], ensure_ascii=False),
                 features_en=json.dumps([
                     "5% discount on paid services",
-                    "Free access to free courses",
+                    "Free diabetes course subscription",
                     "Periodic alerts and follow-ups",
                     "Reward points on every purchase"
                 ])
@@ -575,18 +575,28 @@ def get_medical_profile(user_id: int = 1, db: Session = Depends(get_db)):
     """Get user's medical profile."""
     profile = db.query(MedicalProfile).filter(MedicalProfile.user_id == user_id).first()
     if not profile:
-        return {"user_id": user_id, "is_smoker": False, "daily_exercise": False,
-                "diabetes_type": None, "medications": [], "meals_per_day": 3,
-                "allergies": None, "medical_notes": None, "attachments": []}
+        return {"user_id": user_id, "smoker": False, "daily_sport": False,
+                "diabetes_type": "", "diagnosis_date": "", "blood_type": "",
+                "hba1c": "", "insulin_type": "", "height": "",
+                "medications": "", "meals_count": 3,
+                "allergies": "", "chronic_diseases": "",
+                "emergency_contact": "", "notes": "", "attachments": []}
     return {
         "user_id": profile.user_id,
-        "is_smoker": profile.is_smoker,
-        "daily_exercise": profile.daily_exercise,
-        "diabetes_type": profile.diabetes_type,
-        "medications": json.loads(profile.medications) if profile.medications else [],
-        "meals_per_day": profile.meals_per_day,
-        "allergies": profile.allergies,
-        "medical_notes": profile.medical_notes,
+        "smoker": profile.is_smoker or False,
+        "daily_sport": profile.daily_exercise or False,
+        "diabetes_type": profile.diabetes_type or "",
+        "diagnosis_date": profile.diagnosis_date or "",
+        "blood_type": profile.blood_type or "",
+        "hba1c": profile.hba1c or "",
+        "insulin_type": profile.insulin_type or "",
+        "height": profile.height or "",
+        "medications": profile.medications or "",
+        "meals_count": profile.meals_per_day or 3,
+        "allergies": profile.allergies or "",
+        "chronic_diseases": profile.chronic_diseases or "",
+        "emergency_contact": profile.emergency_contact or "",
+        "notes": profile.medical_notes or "",
         "attachments": json.loads(profile.attachments) if profile.attachments else [],
     }
 
@@ -601,13 +611,30 @@ def update_medical_profile(data: dict, db: Session = Depends(get_db)):
         profile = MedicalProfile(user_id=user_id)
         db.add(profile)
     
+    # Map frontend field names to model fields
+    if "smoker" in data: profile.is_smoker = data["smoker"]
     if "is_smoker" in data: profile.is_smoker = data["is_smoker"]
+    if "daily_sport" in data: profile.daily_exercise = data["daily_sport"]
     if "daily_exercise" in data: profile.daily_exercise = data["daily_exercise"]
     if "diabetes_type" in data: profile.diabetes_type = data["diabetes_type"]
-    if "medications" in data: profile.medications = json.dumps(data["medications"], ensure_ascii=False)
+    if "diagnosis_date" in data: profile.diagnosis_date = data["diagnosis_date"]
+    if "blood_type" in data: profile.blood_type = data["blood_type"]
+    if "hba1c" in data: profile.hba1c = data["hba1c"]
+    if "insulin_type" in data: profile.insulin_type = data["insulin_type"]
+    if "height" in data: profile.height = data["height"]
+    if "medications" in data:
+        meds = data["medications"]
+        profile.medications = json.dumps(meds, ensure_ascii=False) if isinstance(meds, list) else meds
+    if "meals_count" in data: profile.meals_per_day = data["meals_count"]
     if "meals_per_day" in data: profile.meals_per_day = data["meals_per_day"]
     if "allergies" in data: profile.allergies = data["allergies"]
+    if "chronic_diseases" in data: profile.chronic_diseases = data["chronic_diseases"]
+    if "emergency_contact" in data: profile.emergency_contact = data["emergency_contact"]
+    if "notes" in data: profile.medical_notes = data["notes"]
     if "medical_notes" in data: profile.medical_notes = data["medical_notes"]
+    if "attachments" in data:
+        atts = data["attachments"]
+        profile.attachments = json.dumps(atts, ensure_ascii=False) if isinstance(atts, list) else atts
     
     db.commit()
     return {"status": "success", "message": "تم تحديث الملف الطبي بنجاح"}

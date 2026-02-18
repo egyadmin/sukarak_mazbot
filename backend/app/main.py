@@ -14,6 +14,7 @@ from app.api.chat import router as chat_router
 from app.api.services import router as services_router
 from app.api.seller import router as seller_router
 from app.api.nursing import router as nursing_router
+from app.api.lab import router as lab_router
 from app.api.membership import router as membership_router, seed_membership_data
 from app.db.seed_users import seed_users
 from app.api.payments import router as payments_router
@@ -81,6 +82,7 @@ app.include_router(chat_router, prefix="/api/v1/chat", tags=["chat"])
 app.include_router(services_router, prefix="/api/v1/services", tags=["services"])
 app.include_router(seller_router, prefix="/api/v1/seller", tags=["seller"])
 app.include_router(nursing_router, prefix="/api/v1/nursing", tags=["nursing"])
+app.include_router(lab_router, prefix="/api/v1/lab", tags=["lab"])
 app.include_router(membership_router, prefix="/api/v1", tags=["membership"])
 app.include_router(payments_router, prefix="/api/v1", tags=["payments"])
 app.include_router(support_router, prefix="/api/v1/support", tags=["support"])

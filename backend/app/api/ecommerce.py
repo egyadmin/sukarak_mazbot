@@ -1,17 +1,18 @@
 """
 E-commerce API - Products, Cart, Orders, Coupons, GiftCards, Loyalty
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form, File, UploadFile
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
 from decimal import Decimal
-import uuid, json, random, string
+import uuid, json, random, string, os, shutil
 from datetime import datetime, date, timedelta
 
 from app.db.session import SessionLocal
 from app.models.ecommerce import Product, Order, OrderItem, Coupon, GiftCard, LoyaltyUser
 from app.models.user import User
+from app.models.cms import Notification
 from app.schemas.ecommerce import ProductResponse, OrderResponse
 
 router = APIRouter()
@@ -29,7 +30,7 @@ def get_db():
 # PRODUCTS
 # ================================================
 @router.get("/products", response_model=List[ProductResponse])
-def get_products(category: str = None, db: Session = Depends(get_db)):
+def get_products(category: Optional[str] = None, db: Session = Depends(get_db)):
     query = db.query(Product).filter(Product.status == 1)
     if category and category != "all":
         query = query.filter(Product.category == category)
@@ -56,6 +57,7 @@ def get_product(product_id: int, db: Session = Depends(get_db)):
 class CouponCheckRequest(BaseModel):
     coupon_code: str
     user_id: int = 0
+    section: str = ""  # "store", "lab", "nursing", "appointments" — for section validation
 
 
 @router.post("/coupons/check")
@@ -71,10 +73,16 @@ def check_coupon(req: CouponCheckRequest, db: Session = Depends(get_db)):
         if req.user_id in used_users:
             raise HTTPException(status_code=400, detail="تم استخدام هذا الكوبون مسبقاً")
 
+    # Check section targeting
+    applicable = json.loads(coupon.applicable_sections or "[]") if coupon.applicable_sections else []
+    if applicable and req.section and req.section not in applicable:
+        raise HTTPException(status_code=400, detail=f"هذا الكوبون غير صالح لقسم {'المتجر' if req.section == 'store' else 'التحاليل' if req.section == 'lab' else 'التمريض' if req.section == 'nursing' else 'الاستشارات'}")
+
     return {
         "valid": True,
         "coupon": coupon.coupon,
         "discount": float(coupon.discount) if coupon.discount else 0,
+        "applicable_sections": applicable,
     }
 
 
@@ -172,7 +180,7 @@ def create_order(req: CreateOrderRequest, user_id: int = 0, db: Session = Depend
     total_amount = subtotal - discount_amount
 
     # Create order
-    order_number = f"ORD-{uuid.uuid4().hex[:8].upper()}"
+    order_number = f"ORD-{str(uuid.uuid4().hex)[:8].upper()}"
     new_order = Order(
         order_number=order_number,
         user_id=actual_user_id,
@@ -309,13 +317,34 @@ def get_order_detail(order_id: int, db: Session = Depends(get_db)):
 
 @router.put("/orders/{order_id}/status")
 def update_order_status(order_id: int, status: str, db: Session = Depends(get_db)):
-    """Update order status (admin)."""
+    """Update order status (admin) and send tracking notification."""
     order = db.query(Order).filter(Order.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    old_status = order.status
     order.status = status
+
+    # Create order tracking notification
+    status_messages = {
+        "confirmed": ("✅ تم تأكيد طلبك", f"طلبك رقم #{order.id} تم تأكيده وجاري تجهيزه. شكراً لثقتك بنا!"),
+        "processing": ("📦 جاري تجهيز طلبك", f"طلبك رقم #{order.id} قيد التجهيز وسيتم شحنه قريباً."),
+        "shipped": ("🚚 تم شحن طلبك", f"طلبك رقم #{order.id} في الطريق إليك! متوقع الوصول خلال 2-5 أيام عمل."),
+        "delivered": ("🎉 تم توصيل طلبك", f"طلبك رقم #{order.id} تم توصيله بنجاح. نتمنى أن ينال إعجابك!"),
+        "cancelled": ("❌ تم إلغاء الطلب", f"طلبك رقم #{order.id} تم إلغاؤه. سيتم استرداد المبلغ خلال 3-5 أيام عمل."),
+    }
+    if status in status_messages:
+        title, message = status_messages[status]
+        notif = Notification(
+            title=title,
+            message=message,
+            type="order",
+            target_audience="user",
+            is_active=True,
+        )
+        db.add(notif)
+
     db.commit()
-    return {"status": "success", "order_status": status}
+    return {"status": "success", "order_status": status, "previous_status": old_status}
 
 
 # ================================================
@@ -403,3 +432,188 @@ def subscribe_loyalty(req: LoyaltySubscribeRequest, db: Session = Depends(get_db
         "start_date": today.isoformat(),
         "end_date": end_date.isoformat(),
     }
+
+
+# ================================================
+# MEMBERSHIP SERVICE USAGE TRACKING
+# ================================================
+@router.get("/membership/usage/{user_id}")
+def get_membership_usage(user_id: int, db: Session = Depends(get_db)):
+    """Get all services used with membership card discounts."""
+    from app.models.membership import MembershipServiceUsage, UserMembership
+    usages = db.query(MembershipServiceUsage).filter(
+        MembershipServiceUsage.user_id == user_id
+    ).order_by(MembershipServiceUsage.created_at.desc()).all()
+
+    total_saved = sum(float(u.discount_amount or 0) for u in usages)
+    return {
+        "usages": [{
+            "id": u.id,
+            "service_type": u.service_type,
+            "service_name": u.service_name,
+            "original_price": float(u.original_price or 0),
+            "discounted_price": float(u.discounted_price or 0),
+            "discount_amount": float(u.discount_amount or 0),
+            "created_at": u.created_at.isoformat() if u.created_at else None,
+        } for u in usages],
+        "total_saved": total_saved,
+        "usage_count": len(usages),
+    }
+
+
+@router.post("/membership/usage")
+def track_membership_usage(data: dict, db: Session = Depends(get_db)):
+    """Record a service used with membership discount."""
+    from app.models.membership import MembershipServiceUsage
+    usage = MembershipServiceUsage(
+        user_id=data["user_id"],
+        membership_id=data["membership_id"],
+        service_type=data["service_type"],
+        service_name=data.get("service_name", ""),
+        original_price=data.get("original_price", 0),
+        discounted_price=data.get("discounted_price", 0),
+        discount_amount=data.get("discount_amount", 0),
+        reference_id=data.get("reference_id"),
+    )
+    db.add(usage)
+    db.commit()
+    return {"status": "success", "id": usage.id}
+
+
+# ================================================
+# MARKETING MESSAGES
+# ================================================
+@router.get("/marketing/messages")
+def get_marketing_messages(status: Optional[str] = None, db: Session = Depends(get_db)):
+    """List marketing messages/campaigns."""
+    from app.models.membership import MarketingMessage
+    q = db.query(MarketingMessage)
+    if status:
+        q = q.filter(MarketingMessage.status == status)
+    msgs = q.order_by(MarketingMessage.created_at.desc()).all()
+    return [{
+        "id": m.id, "title": m.title, "body": m.body,
+        "channel": m.channel, "target_audience": m.target_audience,
+        "image_url": m.image_url, "link_url": m.link_url,
+        "status": m.status, "sent_count": m.sent_count,
+        "opened_count": m.opened_count,
+        "scheduled_at": m.scheduled_at.isoformat() if m.scheduled_at else None,
+        "sent_at": m.sent_at.isoformat() if m.sent_at else None,
+        "created_at": m.created_at.isoformat() if m.created_at else None,
+    } for m in msgs]
+
+
+@router.post("/marketing/messages")
+def create_marketing_message(data: dict, db: Session = Depends(get_db)):
+    """Create a new marketing message/campaign."""
+    from app.models.membership import MarketingMessage
+    msg = MarketingMessage(
+        title=data["title"],
+        body=data["body"],
+        channel=data.get("channel", "push"),
+        target_audience=data.get("target_audience", "all"),
+        image_url=data.get("image_url"),
+        link_url=data.get("link_url"),
+        status=data.get("status", "draft"),
+        created_by=data.get("created_by"),
+    )
+    db.add(msg)
+    db.commit()
+    return {"status": "success", "id": msg.id, "message": "تم إنشاء الرسالة التسويقية"}
+
+
+@router.put("/marketing/messages/{msg_id}/send")
+def send_marketing_message(msg_id: int, db: Session = Depends(get_db)):
+    """Mark a marketing message as sent (simulates sending via WhatsApp/email/push)."""
+    from app.models.membership import MarketingMessage
+    from app.models.user import User
+    msg = db.query(MarketingMessage).filter(MarketingMessage.id == msg_id).first()
+    if not msg:
+        raise HTTPException(404, "الرسالة غير موجودة")
+
+    # Count target users
+    target_q = db.query(User)
+    if msg.target_audience and msg.target_audience != "all":
+        if msg.target_audience.startswith("country:"):
+            country = msg.target_audience.split(":")[1]
+            target_q = target_q.filter(User.country == country)
+        elif msg.target_audience == "vip":
+            target_q = target_q.filter(User.role == "vip")
+
+    user_count = target_q.count()
+    msg.status = "sent"
+    msg.sent_at = datetime.utcnow()
+    msg.sent_count = user_count
+
+    # Create in-app notifications for all target users
+    from app.models.cms import Notification
+    users = target_q.all()
+    for u in users:
+        notif = Notification(
+            user_id=u.id, title=msg.title, message=msg.body,
+            type="marketing", active=True
+        )
+        db.add(notif)
+
+    db.commit()
+    return {"status": "success", "sent_count": user_count}
+
+
+# ================================================
+# MULTI-CURRENCY PRICING
+# ================================================
+@router.get("/consultation/packages")
+def get_consultation_packages(country: str = "SA", db: Session = Depends(get_db)):
+    """Get consultation packages with pricing for the user's country."""
+    from app.models.membership import ConsultationPackage
+    packages = db.query(ConsultationPackage).filter(
+        ConsultationPackage.active == True
+    ).order_by(ConsultationPackage.sort_order).all()
+
+    currency_map = {"EG": "EGP", "SA": "SAR", "AE": "AED", "OM": "OMR"}
+    currency = currency_map.get(country, "SAR")
+
+    return [{
+        "id": p.id,
+        "name_ar": p.name_ar, "name_en": p.name_en,
+        "description_ar": p.description_ar, "description_en": p.description_en,
+        "features_ar": json.loads(p.features_ar or "[]"),
+        "features_en": json.loads(p.features_en or "[]"),
+        "price": getattr(p, f"price_{country.lower()}", p.price_sa) or p.price_sa,
+        "currency": currency,
+        "duration": p.duration, "icon": p.icon,
+    } for p in packages]
+
+
+# ================================================
+# ADMIN ATTACHMENTS
+# ================================================
+@router.post("/admin/attachments")
+def upload_admin_attachments(
+    record_type: str = Form(...),  # medical_profile, order, product
+    record_id: int = Form(...),
+    files: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload multiple attachments for admin use."""
+    os.makedirs("media/attachments", exist_ok=True)
+    uploaded = []
+    for f in files:
+        ext = os.path.splitext(f.filename)[1]
+        fname = f"{uuid.uuid4().hex}{ext}"
+        path = f"media/attachments/{fname}"
+        with open(path, "wb") as out:
+            shutil.copyfileobj(f.file, out)
+        uploaded.append(f"/media/attachments/{fname}")
+
+    # Update the record's attachments field
+    if record_type == "medical_profile":
+        from app.models.membership import MedicalProfile
+        rec = db.query(MedicalProfile).filter(MedicalProfile.id == record_id).first()
+        if rec:
+            existing = json.loads(rec.attachments or "[]") if rec.attachments else []
+            existing.extend(uploaded)
+            rec.attachments = json.dumps(existing)
+            db.commit()
+
+    return {"status": "success", "files": uploaded, "count": len(uploaded)}

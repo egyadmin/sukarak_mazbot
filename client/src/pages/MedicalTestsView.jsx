@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
-import { ArrowRight, TestTube, X, Check, Clock, Loader2, Search, Droplets, FlaskConical, Pill, Activity, MoreHorizontal, Calendar, MapPin, CreditCard, User } from 'lucide-react';
+import { ArrowRight, TestTube, X, Check, Clock, Loader2, Search, Droplets, FlaskConical, Pill, Activity, MoreHorizontal, Calendar, MapPin, CreditCard, User, MessageCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { API_BASE } from '../api/config';
-import bannerImg from '@assets/image_1771065508471.png';
+const bannerImg = null; // Asset was on Replit - using gradient fallback
 
 const SERVICES_API = `${API_BASE}/services/nursing/services`;
 const BOOKINGS_API = `${API_BASE}/services/nursing/bookings`;
@@ -121,7 +121,7 @@ const MedicalTestsView = () => {
             </div>
 
             <div className="relative rounded-2xl overflow-hidden shadow-lg">
-                <img src={bannerImg} alt="Medical Tests" className="w-full h-44 object-cover" />
+                {bannerImg ? <img src={bannerImg} alt="Medical Tests" className="w-full h-44 object-cover" /> : <div className="w-full h-44 bg-gradient-to-br from-sky-400 via-teal-500 to-emerald-600" />}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
                 <div className="absolute bottom-0 left-0 right-0 p-5 text-white">
                     <h3 className="text-lg font-black mb-1">{lang === 'ar' ? 'التحاليل والفحوصات الطبية' : 'Medical Tests & Lab Work'}</h3>
@@ -218,6 +218,13 @@ const MedicalTestsView = () => {
                                     {b.time && <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{b.time}</span>}
                                     {b.nurse_name && <span className="flex items-center gap-1"><User className="w-3 h-3" />{b.nurse_name}</span>}
                                 </div>
+                                {b.status !== 'cancelled' && b.status !== 'completed' && (
+                                    <a href={`https://wa.me/201027696380?text=${encodeURIComponent(lang === 'ar' ? `استفسار عن تحليل: ${b.service_name} بتاريخ ${b.date}` : `Query about lab test: ${b.service_name} on ${b.date}`)}`}
+                                        target="_blank" rel="noreferrer"
+                                        className="mt-2 text-emerald-500 text-[11px] font-bold flex items-center gap-1 hover:text-emerald-700 transition">
+                                        <MessageCircle className="w-3 h-3" /> {lang === 'ar' ? 'تواصل عبر واتساب' : 'Contact via WhatsApp'}
+                                    </a>
+                                )}
                             </motion.div>
                         ))}
                     </div>
@@ -234,6 +241,11 @@ const MedicalTestsView = () => {
                             {successData.price && (
                                 <p className="text-sm text-white/80 font-bold">{lang === 'ar' ? 'المبلغ: ' : 'Amount: '}{successData.price} {lang === 'ar' ? 'ر.س' : 'SAR'}</p>
                             )}
+                            <a href={`https://wa.me/201027696380?text=${encodeURIComponent(lang === 'ar' ? `مرحباً، طلبت تحليل: ${successData.service_name}. أود تنسيق موعد جمع العينة.` : `Hello, I ordered a lab test: ${successData.service_name}. I'd like to coordinate sample collection.`)}`}
+                                target="_blank" rel="noreferrer"
+                                className="mt-2 bg-white/20 px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2">
+                                <MessageCircle className="w-4 h-4" /> {lang === 'ar' ? 'تنسيق عبر واتساب' : 'Coordinate via WhatsApp'}
+                            </a>
                         </div>
                     </motion.div>
                 )}

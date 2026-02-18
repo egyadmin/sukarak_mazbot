@@ -3,19 +3,19 @@ import { ArrowRight, Calculator, AlertTriangle, Info, ChevronDown, ChevronUp, Us
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import formulaImg from '@assets/image_1771067124616.png';
+const formulaImg = null;
 
 const CALORIE_TABLE = {
     male: {
-        '2-3':   { sedentary: [1000, 1200], light: [1000, 1400], active: [1000, 1400] },
-        '4-8':   { sedentary: [1200, 1400], light: [1400, 1600], active: [1600, 2000] },
-        '9-13':  { sedentary: [1600, 2000], light: [1800, 2200], active: [2000, 2600] },
+        '2-3': { sedentary: [1000, 1200], light: [1000, 1400], active: [1000, 1400] },
+        '4-8': { sedentary: [1200, 1400], light: [1400, 1600], active: [1600, 2000] },
+        '9-13': { sedentary: [1600, 2000], light: [1800, 2200], active: [2000, 2600] },
         '14-18': { sedentary: [2000, 2400], light: [2400, 2800], active: [2800, 3200] },
     },
     female: {
-        '2-3':   { sedentary: [1000, 1000], light: [1000, 1200], active: [1000, 1400] },
-        '4-8':   { sedentary: [1200, 1400], light: [1400, 1600], active: [1400, 1800] },
-        '9-13':  { sedentary: [1400, 1600], light: [1600, 2000], active: [1800, 2200] },
+        '2-3': { sedentary: [1000, 1000], light: [1000, 1200], active: [1000, 1400] },
+        '4-8': { sedentary: [1200, 1400], light: [1400, 1600], active: [1400, 1800] },
+        '9-13': { sedentary: [1400, 1600], light: [1600, 2000], active: [1800, 2200] },
         '14-18': { sedentary: [1800, 1800], light: [2000, 2000], active: [2400, 2400] },
     },
 };
@@ -432,7 +432,7 @@ const InsulinCalculator = () => {
                         <AnimatePresence>
                             {showFormula && (
                                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                                    <img src={formulaImg} alt="Formula Table" className="w-full rounded-2xl border border-gray-200 shadow-sm" />
+                                    {formulaImg ? <img src={formulaImg} alt="Formula Table" className="w-full rounded-2xl border border-gray-200 shadow-sm" /> : <div className="w-full h-48 bg-gradient-to-br from-blue-50 to-indigo-100 rounded-2xl border border-gray-200 shadow-sm flex items-center justify-center text-gray-400 text-sm font-bold">Formula Table</div>}
                                 </motion.div>
                             )}
                         </AnimatePresence>

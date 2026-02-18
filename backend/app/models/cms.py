@@ -13,6 +13,7 @@ class Banner(Base):
     active = Column(Boolean(), default=True)
     sort_order = Column(Integer, default=0)
     target_type = Column(String(50), default="internal")  # internal, external, none
+    section = Column(String(50), default="homepage")  # homepage, store, lab_tests, nursing
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

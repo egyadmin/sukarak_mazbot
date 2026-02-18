@@ -153,7 +153,7 @@ def get_seller_stats(seller_id: int, period: str = "all", db: Session = Depends(
         "delivered_orders": delivered_orders,
         "cancelled_orders": cancelled_orders,
         "total_revenue": total_revenue,
-        "revenue_growth": round(revenue_growth, 1),
+        "revenue_growth": int(float(revenue_growth) * 10) / 10,
         "low_stock": len([p for p in products if p.stock < low_threshold]),
         "top_products": top_products,
         "monthly_revenue": monthly_revenue,
@@ -190,8 +190,10 @@ def get_seller_products(seller_id: int, status: Optional[str] = None, category: 
         "id": p.id, "title": p.title, "details": p.details,
         "price": float(p.price), "offer_price": float(p.offer_price or 0),
         "stock": p.stock, "img_url": p.img_url,
+        "images": json.loads(p.images or "[]") if p.images else [],
         "category": p.category, "sub_category": p.sub_category,
         "status": p.status, "in_review": p.in_review,
+        "returnable": getattr(p, 'returnable', True),
     } for p in products]
 
 
@@ -237,13 +239,51 @@ def add_seller_product(
 
 
 @router.put("/products/{product_id}")
-def update_seller_product(product_id: int, data: dict, db: Session = Depends(get_db)):
+def update_seller_product(
+    product_id: int,
+    title: Optional[str] = Form(None),
+    details: Optional[str] = Form(None),
+    price: Optional[float] = Form(None),
+    stock: Optional[int] = Form(None),
+    category: Optional[str] = Form(None),
+    sub_category: Optional[str] = Form(None),
+    offer_price: Optional[float] = Form(None),
+    brand: Optional[str] = Form(None),
+    sku: Optional[str] = Form(None),
+    offer_start_date: Optional[str] = Form(None),
+    offer_end_date: Optional[str] = Form(None),
+    returnable: Optional[str] = Form(None),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
         raise HTTPException(404, "المنتج غير موجود")
-    for key in ["title", "details", "price", "stock", "category", "sub_category", "offer_price", "status", "brand", "sku", "offer_start_date", "offer_end_date"]:
-        if key in data:
-            setattr(product, key, data[key])
+    
+    # Update fields if provided
+    if title is not None: product.title = title
+    if details is not None: product.details = details
+    if price is not None: product.price = price
+    if stock is not None: product.stock = stock
+    if category is not None: product.category = category
+    if sub_category is not None: product.sub_category = sub_category
+    if offer_price is not None: product.offer_price = offer_price
+    if brand is not None: product.brand = brand
+    if sku is not None: product.sku = sku
+    if offer_start_date is not None: product.offer_start_date = offer_start_date if offer_start_date else None
+    if offer_end_date is not None: product.offer_end_date = offer_end_date if offer_end_date else None
+    if returnable is not None: product.returnable = returnable in ("1", "true", "True")
+    
+    # Handle image upload on edit
+    if image:
+        ext = os.path.splitext(image.filename)[1]
+        fname = f"{uuid.uuid4().hex}{ext}"
+        path = f"media/products/{fname}"
+        os.makedirs("media/products", exist_ok=True)
+        with open(path, "wb") as f:
+            shutil.copyfileobj(image.file, f)
+        product.img_url = f"/media/products/{fname}"
+    
     db.commit()
     return {"status": "success", "message": "تم تحديث المنتج"}
 
@@ -267,12 +307,38 @@ def duplicate_product(product_id: int, db: Session = Depends(get_db)):
         title=f"{product.title} (نسخة)", details=product.details,
         price=product.price, offer_price=product.offer_price,
         stock=product.stock, img_url=product.img_url,
+        images=product.images,
         category=product.category, sub_category=product.sub_category,
-        seller=product.seller, status=0, in_review=0
+        seller=product.seller, status=0, in_review=0,
+        returnable=getattr(product, 'returnable', True),
     )
     db.add(new_product)
     db.commit()
     return {"status": "success", "id": new_product.id, "message": "تم نسخ المنتج بنجاح"}
+
+
+@router.post("/products/{product_id}/images")
+def upload_product_images(
+    product_id: int,
+    images: List[UploadFile] = File(...),
+    db: Session = Depends(get_db)
+):
+    """Upload additional images for a product."""
+    product = db.query(Product).filter(Product.id == product_id).first()
+    if not product:
+        raise HTTPException(404, "المنتج غير موجود")
+    existing = json.loads(product.images or "[]") if product.images else []
+    os.makedirs("media/products", exist_ok=True)
+    for img in images:
+        ext = os.path.splitext(img.filename)[1]
+        fname = f"{uuid.uuid4().hex}{ext}"
+        path = f"media/products/{fname}"
+        with open(path, "wb") as f:
+            shutil.copyfileobj(img.file, f)
+        existing.append(f"/media/products/{fname}")
+    product.images = json.dumps(existing)
+    db.commit()
+    return {"status": "success", "images": existing, "message": f"تم رفع {len(images)} صورة"}
 
 
 @router.delete("/products/{product_id}")
@@ -322,10 +388,11 @@ def get_seller_orders(seller_id: int, status: Optional[str] = None,
 
         # Search filter
         if search:
+            s = str(search)
             search_match = (
-                search in (o.order_number or '') or
-                search in (user.name if user else '') or
-                any(search in (i.product_name or '') for i in items)
+                s in str(o.order_number or '') or
+                s in str(user.name if user else '') or
+                any(s in str(i.product_name or '') for i in items)
             )
             if not search_match:
                 continue
@@ -646,7 +713,14 @@ def get_sales_report(seller_id: int, period: str = "month", db: Session = Depend
     seller = get_seller_or_404(db, seller_id)
     product_ids = get_seller_product_ids(db, seller.name)
     if not product_ids:
-        return {"daily": [], "summary": {}}
+        return {
+            "total_sales": 0, "total_orders": 0, "avg_order_value": 0,
+            "return_rate": 0, "by_category": {}, "daily": [],
+            "top_products": [], "delivered": 0, "cancelled": 0,
+            "conversion_rate": 0, "pending_orders": 0, "processing_orders": 0,
+            "total_products": len(product_ids), "low_stock_count": 0,
+            "total_customers": 0, "repeat_customers": 0,
+        }
 
     now = datetime.utcnow()
     if period == "week":
@@ -659,8 +733,8 @@ def get_sales_report(seller_id: int, period: str = "month", db: Session = Depend
         start = now - timedelta(days=365)
         group_format = "%Y-%m"
     else:
-        start = now - timedelta(days=30)
-        group_format = "%Y-%m-%d"
+        start = now - timedelta(days=365 * 10)
+        group_format = "%Y-%m"
 
     order_ids = [oid[0] for oid in db.query(OrderItem.order_id).filter(
         OrderItem.product_id.in_(product_ids)
@@ -677,25 +751,77 @@ def get_sales_report(seller_id: int, period: str = "month", db: Session = Depend
             continue
         key = o.created_at.strftime(group_format)
         if key not in daily:
-            daily[key] = {"date": key, "orders": 0, "revenue": 0, "items": 0}
+            daily[key] = {"date": key, "orders": 0, "revenue": 0}
         daily[key]["orders"] += 1
-        daily[key]["revenue"] += float(o.total_amount)
+        daily[key]["revenue"] += float(o.total_amount or 0)
 
-    total_revenue = sum(float(o.total_amount) for o in orders)
+    total_revenue = sum(float(o.total_amount or 0) for o in orders)
     total_orders = len(orders)
     delivered = len([o for o in orders if o.status == 'delivered'])
     cancelled = len([o for o in orders if o.status == 'cancelled'])
+    pending = len([o for o in orders if o.status in ('confirmed', 'pending')])
+    processing = len([o for o in orders if o.status == 'processing'])
+
+    # Returns count
+    returns_count = db.query(func.count(OrderReturn.id)).filter(
+        OrderReturn.seller_id == seller_id
+    ).scalar() or 0
+    _return_pct: float = float(returns_count) / float(total_orders) * 100.0 if total_orders else 0.0
+    return_rate = int(_return_pct * 10) / 10
+
+    # Sales by category
+    by_category = {}
+    items_in_orders = db.query(
+        Product.category, func.sum(OrderItem.total_price)
+    ).join(Product, OrderItem.product_id == Product.id).filter(
+        OrderItem.order_id.in_([o.id for o in orders]),
+        OrderItem.product_id.in_(product_ids)
+    ).group_by(Product.category).all() if orders else []
+    for cat, total in items_in_orders:
+        _cat_val: float = float(total or 0)
+        by_category[cat or "other"] = int(_cat_val * 100) / 100
+
+    # Top products
+    top_prods = db.query(
+        OrderItem.product_name,
+        func.sum(OrderItem.total_price).label('sales'),
+        func.sum(OrderItem.quantity).label('qty')
+    ).filter(
+        OrderItem.order_id.in_([o.id for o in orders]),
+        OrderItem.product_id.in_(product_ids)
+    ).group_by(OrderItem.product_name).order_by(desc('sales')).limit(10).all() if orders else []
+
+    # Customers
+    customer_ids = list(set(o.user_id for o in orders if o.user_id))
+    repeat_customers = 0
+    if customer_ids:
+        from collections import Counter
+        user_order_counts = Counter(o.user_id for o in orders if o.user_id)
+        repeat_customers = sum(1 for c in user_order_counts.values() if c > 1)
+
+    # Low stock
+    low_stock = db.query(func.count(Product.id)).filter(
+        Product.id.in_(product_ids), Product.stock <= 5
+    ).scalar() or 0
 
     return {
-        "daily": list(daily.values()),
-        "summary": {
-            "total_revenue": total_revenue,
-            "total_orders": total_orders,
-            "avg_order_value": total_revenue / total_orders if total_orders else 0,
-            "delivered": delivered,
-            "cancelled": cancelled,
-            "conversion_rate": (delivered / total_orders * 100) if total_orders else 0,
-        }
+        "total_sales": int(float(total_revenue) * 100) / 100,
+        "total_orders": total_orders,
+        "avg_order_value": int(float(total_revenue) / float(total_orders) * 100) / 100 if total_orders else 0,
+        "return_rate": return_rate,
+        "by_category": by_category,
+        "daily": sorted(daily.values(), key=lambda x: x["date"]),
+        "top_products": [{"name": p[0], "sales": int(float(p[1] or 0) * 100) / 100, "quantity": int(p[2] or 0)} for p in top_prods],
+        "delivered": delivered,
+        "cancelled": cancelled,
+        "pending_orders": pending,
+        "processing_orders": processing,
+        "conversion_rate": int(float(delivered) / float(total_orders) * 1000) / 10 if total_orders else 0,
+        "total_products": len(product_ids),
+        "low_stock_count": low_stock,
+        "total_customers": len(customer_ids),
+        "repeat_customers": repeat_customers,
+        "returns_count": returns_count,
     }
 
 
@@ -820,3 +946,97 @@ def change_seller_password(data: dict, db: Session = Depends(get_db)):
     seller.password = hashed
     db.commit()
     return {"status": "success", "message": "تم تغيير كلمة المرور بنجاح"}
+
+
+# ═══════════════════════════════════════════════════════════════
+# RETURNS MANAGEMENT
+# ═══════════════════════════════════════════════════════════════
+
+@router.get("/returns")
+def get_seller_returns(seller_id: int, db: Session = Depends(get_db)):
+    """Get all returns for a seller."""
+    get_seller_or_404(db, seller_id)
+    returns = db.query(OrderReturn).filter(
+        OrderReturn.seller_id == seller_id
+    ).order_by(desc(OrderReturn.created_at)).all()
+
+    result = []
+    for r in returns:
+        order = db.query(Order).filter(Order.id == r.order_id).first()
+        # Parse items JSON for product names
+        product_name = None
+        try:
+            items = json.loads(r.items) if r.items else []
+            if items:
+                product_name = items[0].get("product_name", None)
+        except Exception:
+            pass
+
+        result.append({
+            "id": r.id,
+            "order_id": r.order_id,
+            "order_number": order.order_number if order else f"ORD-{r.order_id}",
+            "order_date": order.created_at.isoformat() if order and order.created_at else None,
+            "return_number": r.return_number,
+            "type": r.type,
+            "status": r.status if r.status != "requested" else "pending",
+            "reason": r.reason_details or r.reason,
+            "product_name": product_name,
+            "refund_amount": float(r.refund_amount or 0),
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        })
+    return result
+
+
+@router.put("/returns/{return_id}/approve")
+def approve_return(return_id: int, seller_id: int, db: Session = Depends(get_db)):
+    """Approve a return request."""
+    get_seller_or_404(db, seller_id)
+    ret = db.query(OrderReturn).filter(
+        OrderReturn.id == return_id,
+        OrderReturn.seller_id == seller_id
+    ).first()
+    if not ret:
+        raise HTTPException(404, "طلب الإرجاع غير موجود")
+    if ret.status not in ("requested", "pending", "pending_approval"):
+        raise HTTPException(400, "لا يمكن الموافقة على هذا الطلب")
+
+    ret.status = "approved"
+    ret.approved_at = datetime.utcnow()
+    db.commit()
+
+    # Notify the customer
+    create_notification(
+        db, ret.user_id, "return_approved",
+        "تمت الموافقة على طلب الإرجاع",
+        f"تمت الموافقة على طلب الإرجاع رقم {ret.return_number}",
+        related_type="return", related_id=ret.id
+    )
+    return {"status": "success", "message": "تم قبول الإرجاع"}
+
+
+@router.put("/returns/{return_id}/reject")
+def reject_return(return_id: int, seller_id: int, reason: str = "", db: Session = Depends(get_db)):
+    """Reject a return request."""
+    get_seller_or_404(db, seller_id)
+    ret = db.query(OrderReturn).filter(
+        OrderReturn.id == return_id,
+        OrderReturn.seller_id == seller_id
+    ).first()
+    if not ret:
+        raise HTTPException(404, "طلب الإرجاع غير موجود")
+    if ret.status not in ("requested", "pending", "pending_approval"):
+        raise HTTPException(400, "لا يمكن رفض هذا الطلب")
+
+    ret.status = "rejected"
+    ret.rejected_at = datetime.utcnow()
+    ret.rejection_reason = reason or "تم الرفض من قبل البائع"
+    db.commit()
+
+    create_notification(
+        db, ret.user_id, "return_rejected",
+        "تم رفض طلب الإرجاع",
+        f"تم رفض طلب الإرجاع رقم {ret.return_number}",
+        related_type="return", related_id=ret.id
+    )
+    return {"status": "success", "message": "تم رفض الإرجاع"}

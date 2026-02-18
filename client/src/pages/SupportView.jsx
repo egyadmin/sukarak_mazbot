@@ -129,7 +129,7 @@ const SupportView = () => {
 
             {/* Quick Contact Methods */}
             <div className="grid grid-cols-2 gap-3">
-                <a href="https://wa.me/201012345678" target="_blank" rel="noreferrer"
+                <a href="https://wa.me/201027696380" target="_blank" rel="noreferrer"
                     className="bg-gradient-to-br from-emerald-500 to-green-600 p-4 rounded-3xl text-white flex flex-col items-center gap-2 shadow-lg shadow-emerald-200/50 active:scale-95 transition">
                     <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
                         <MessageCircle className="w-6 h-6" />
@@ -137,13 +137,13 @@ const SupportView = () => {
                     <span className="font-black text-sm">{lang === 'ar' ? 'واتساب' : 'WhatsApp'}</span>
                     <span className="text-[9px] text-white/70">{lang === 'ar' ? 'تواصل مباشر' : 'Direct chat'}</span>
                 </a>
-                <a href="tel:+201012345678"
+                <a href="mailto:sukarakmazbout@gmail.com"
                     className="bg-gradient-to-br from-blue-500 to-indigo-600 p-4 rounded-3xl text-white flex flex-col items-center gap-2 shadow-lg shadow-blue-200/50 active:scale-95 transition">
                     <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                        <Phone className="w-6 h-6" />
+                        <Mail className="w-6 h-6" />
                     </div>
-                    <span className="font-black text-sm">{lang === 'ar' ? 'اتصل بنا' : 'Call Us'}</span>
-                    <span className="text-[9px] text-white/70">{lang === 'ar' ? 'خط مباشر' : 'Direct line'}</span>
+                    <span className="font-black text-sm">{lang === 'ar' ? 'البريد الإلكتروني' : 'Email Us'}</span>
+                    <span className="text-[9px] text-white/70">sukarakmazbout@gmail.com</span>
                 </a>
             </div>
 

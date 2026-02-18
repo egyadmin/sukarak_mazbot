@@ -12,6 +12,7 @@ class Product(Base):
     offer_price = Column(Numeric(10, 2), default=0)
     stock = Column(Integer, default=0)
     img_url = Column(String(512))
+    images = Column(Text, default="[]")  # JSON array of additional image URLs
     category = Column(String(255))
     sub_category = Column(String(255))
     country = Column(String(255), default="[]")
@@ -20,6 +21,7 @@ class Product(Base):
     sku = Column(String(100), nullable=True)            # رقم المنتج / السيريال
     offer_start_date = Column(DateTime, nullable=True)  # تاريخ بداية العرض
     offer_end_date = Column(DateTime, nullable=True)    # تاريخ نهاية العرض
+    returnable = Column(Boolean(), default=True)        # قابل للإرجاع
     status = Column(Integer, default=1)
     in_review = Column(Integer, default=0)
 
@@ -70,6 +72,8 @@ class Coupon(Base):
     users = Column(Text, default="[]")  # JSON array of user IDs who used it
     max_uses = Column(Integer, default=0)  # 0 = unlimited
     active = Column(Boolean(), default=True)
+    applicable_sections = Column(Text, default="[]")  # JSON: ["store","lab","nursing","appointments"] — empty=all
+    vip_only = Column(Boolean(), default=False)  # VIP customers only
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 

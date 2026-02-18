@@ -4,8 +4,6 @@
   "webDir": "dist",
   "server": {
     "androidScheme": "http",
-    "cleartext": true,
-    "url": "http://10.0.2.2:3000",
-    "originalUrl": "http://10.0.2.2:3000"
+    "cleartext": true
   }
 }

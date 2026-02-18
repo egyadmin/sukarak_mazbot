@@ -87,28 +87,27 @@ const HomeView = () => {
     const lang = i18n.language === 'ar' ? 'ar' : 'en';
     const getTypeLabel = (key) => typeLabels[lang]?.[key] || typeLabels['ar']?.[key] || key;
 
-    const [recentSugar, setRecentSugar] = useState([]);
-    const [latestReading, setLatestReading] = useState(null);
+
     const [banners, setBanners] = useState([]);
     const [currentBanner, setCurrentBanner] = useState(0);
     const [notifications, setNotifications] = useState([]);
+    const [appSettings, setAppSettings] = useState({});
     const bannerInterval = useRef(null);
 
     useEffect(() => { loadData(); }, []);
 
     const loadData = async () => {
         try {
-            const { data: sugar } = await DataService.getSugarReadings();
-            setRecentSugar(sugar.slice(0, 7));
-            if (sugar.length > 0) setLatestReading(sugar[0]);
-        } catch { }
-        try {
-            const { data: b } = await DataService.getBanners();
+            const { data: b } = await DataService.getBanners('homepage');
             setBanners(b.filter(x => x.active));
         } catch { }
         try {
             const { data: n } = await DataService.getNotifications();
             setNotifications(n.filter(x => x.active).slice(0, 3));
+        } catch { }
+        try {
+            const { data: s } = await DataService.getAppSettings();
+            if (s) setAppSettings(s);
         } catch { }
     };
 
@@ -119,56 +118,47 @@ const HomeView = () => {
         }
     }, [banners]);
 
-    const getSugarStatus = (reading) => {
-        if (!reading) return { text: lang === 'ar' ? 'لا توجد قراءات' : 'No readings', color: 'text-gray-400', bg: 'from-gray-100 to-gray-50', icon: Minus, emoji: '🤷' };
-        const val = reading.reading;
-        if (val < 70) return { text: lang === 'ar' ? 'منخفض ⚠️' : 'Low ⚠️', color: 'text-red-500', bg: 'from-red-50 to-orange-50', icon: TrendingDown, emoji: '⚠️' };
-        if (val <= 140) return { text: lang === 'ar' ? 'طبيعي ممتاز ✨' : 'Excellent ✨', color: 'text-emerald-600', bg: 'from-emerald-50 to-teal-50', icon: TrendingUp, emoji: '🌟' };
-        if (val <= 200) return { text: lang === 'ar' ? 'مرتفع قليلاً' : 'Slightly High', color: 'text-amber-500', bg: 'from-amber-50 to-yellow-50', icon: TrendingUp, emoji: '⚡' };
-        return { text: lang === 'ar' ? 'مرتفع 🔴' : 'High 🔴', color: 'text-red-600', bg: 'from-red-50 to-rose-50', icon: TrendingUp, emoji: '🔴' };
-    };
 
-    const status = getSugarStatus(latestReading);
-    const chartData = useMemo(() => recentSugar.map(r => r.reading).reverse(), [recentSugar]);
-    const chartLabels = useMemo(() => recentSugar.map(r => {
-        const d = new Date(r.created_at);
-        return d.toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en', { weekday: 'short' });
-    }).reverse(), [recentSugar, lang]);
 
-    // All sections with premium icons
-    const sections = [
-        { title: lang === 'ar' ? 'تابع صحتك' : 'Health', icon: Activity, path: '/health-tracking', gradient: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-200/60' },
-        { title: lang === 'ar' ? 'الأطعمة' : 'Foods', icon: Utensils, path: '/foods', gradient: 'from-orange-400 to-amber-500', shadow: 'shadow-orange-200/60' },
-        { title: lang === 'ar' ? 'الرياضة' : 'Sports', icon: Dumbbell, path: '/sports', gradient: 'from-blue-500 to-indigo-600', shadow: 'shadow-blue-200/60' },
-        { title: lang === 'ar' ? 'منبه الدواء' : 'Med Reminder', icon: AlarmClock, path: '/medicine-reminder', gradient: 'from-rose-500 to-red-500', shadow: 'shadow-rose-200/60' },
-        { title: lang === 'ar' ? 'المواعيد' : 'Appointments', icon: Calendar, path: '/appointments', gradient: 'from-violet-500 to-purple-600', shadow: 'shadow-violet-200/60' },
-        { title: lang === 'ar' ? 'التقارير' : 'Reports', icon: FileBarChart, path: '/reports', gradient: 'from-cyan-500 to-teal-500', shadow: 'shadow-cyan-200/60' },
+    // Helper to check if a section is enabled by admin
+    const isEnabled = (key) => appSettings[key] !== 'false';
+
+    // All sections with premium icons (filtered by admin settings)
+    const allSections = [
+        { title: lang === 'ar' ? 'تابع صحتك' : 'Health', icon: Activity, path: '/health-tracking', gradient: 'from-emerald-500 to-teal-600', shadow: 'shadow-emerald-200/60', settingKey: null },
+        { title: lang === 'ar' ? 'الأطعمة' : 'Foods', icon: Utensils, path: '/foods', gradient: 'from-orange-400 to-amber-500', shadow: 'shadow-orange-200/60', settingKey: null },
+        { title: lang === 'ar' ? 'الرياضة' : 'Sports', icon: Dumbbell, path: '/sports', gradient: 'from-blue-500 to-indigo-600', shadow: 'shadow-blue-200/60', settingKey: null },
+        { title: lang === 'ar' ? 'منبه الدواء' : 'Med Reminder', icon: AlarmClock, path: '/medicine-reminder', gradient: 'from-rose-500 to-red-500', shadow: 'shadow-rose-200/60', settingKey: null },
+        { title: lang === 'ar' ? 'المواعيد' : 'Appointments', icon: Calendar, path: '/appointments', gradient: 'from-violet-500 to-purple-600', shadow: 'shadow-violet-200/60', settingKey: 'show_appointments_section' },
+        { title: lang === 'ar' ? 'التقارير' : 'Reports', icon: FileBarChart, path: '/reports', gradient: 'from-cyan-500 to-teal-500', shadow: 'shadow-cyan-200/60', settingKey: 'show_reports_section' },
     ];
+    const sections = allSections.filter(s => !s.settingKey || isEnabled(s.settingKey));
 
-    const quickActions = [
-        { label: lang === 'ar' ? 'احجز موعد' : 'Book Appt', icon: Calendar, path: '/appointments', color: 'bg-gradient-to-br from-teal-500 to-emerald-600' },
-        { label: lang === 'ar' ? 'العناية بالسكري' : 'Diabetes Care', icon: ShoppingBag, path: '/market', color: 'bg-gradient-to-br from-orange-400 to-amber-500' },
-        { label: lang === 'ar' ? 'التحاليل الطبية' : 'Medical Tests', icon: TestTube, path: '/medical-tests', color: 'bg-gradient-to-br from-sky-500 to-cyan-600' },
-        { label: lang === 'ar' ? 'التمريض المنزلي' : 'Home Nursing', icon: Heart, path: '/nursing', color: 'bg-gradient-to-br from-rose-500 to-pink-600' },
+    const allQuickActions = [
+        { label: lang === 'ar' ? 'احجز موعد' : 'Book Appt', icon: Calendar, path: '/appointments', color: 'bg-gradient-to-br from-teal-500 to-emerald-600', settingKey: 'show_appointments_section' },
+        { label: lang === 'ar' ? 'العناية بالسكري' : 'Diabetes Care', icon: ShoppingBag, path: '/market', color: 'bg-gradient-to-br from-sky-400 to-cyan-500', settingKey: 'show_market_section' },
+        { label: lang === 'ar' ? 'التحاليل الطبية' : 'Medical Tests', icon: TestTube, path: '/medical-tests', color: 'bg-gradient-to-br from-sky-500 to-cyan-600', settingKey: 'show_lab_section' },
+        { label: lang === 'ar' ? 'التمريض المنزلي' : 'Home Nursing', icon: Heart, path: '/nursing', color: 'bg-gradient-to-br from-rose-500 to-pink-600', settingKey: 'show_nursing_section' },
     ];
+    const quickActions = allQuickActions.filter(a => isEnabled(a.settingKey));
 
     return (
         <div className="space-y-5 pb-8">
 
             {/* ═══════ BANNER SLIDER (PREMIUM) ═══════ */}
-            {banners.length > 0 && (
+            {banners.length > 0 && isEnabled('show_banner_slider') && (
                 <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }}
-                    className="relative rounded-[1.8rem] overflow-hidden shadow-2xl shadow-gray-300/50 h-36">
+                    className="relative rounded-[1.8rem] overflow-hidden shadow-2xl shadow-gray-300/50 bg-white">
                     <AnimatePresence mode="wait">
                         <motion.div key={currentBanner}
                             initial={{ opacity: 0, scale: 1.08 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ duration: 0.6, ease: [0.4, 0, 0.2, 1] }}
-                            className="absolute inset-0"
+                            className="w-full"
                         >
                             <img src={banners[currentBanner]?.image_url} alt={banners[currentBanner]?.title || ''}
-                                className="w-full h-full object-cover"
-                                onError={e => { 
-                                    e.target.src = `https://images.unsplash.com/photo-1505751172107-573225a91200?w=800&q=80`; 
+                                className="w-full h-auto block rounded-[1.8rem]"
+                                onError={e => {
+                                    e.target.src = `https://images.unsplash.com/photo-1505751172107-573225a91200?w=800&q=80`;
                                 }} />
                         </motion.div>
                     </AnimatePresence>
@@ -191,83 +181,7 @@ const HomeView = () => {
                 ))}
             </div>
 
-            {/* ═══════ SUGAR STATUS CARD ═══════ */}
-            <motion.div
-                initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-                className="relative overflow-hidden rounded-[1.8rem] animated-gradient p-[1px]"
-            >
-                <div className="bg-white/95 backdrop-blur-xl rounded-[1.75rem] p-5">
-                    <div className="flex items-start justify-between mb-4">
-                        <div>
-                            <div className="flex items-center gap-2 mb-1">
-                                <div className="relative">
-                                    <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${status.bg} flex items-center justify-center`}>
-                                        <status.icon className={`w-5 h-5 ${status.color}`} />
-                                    </div>
-                                    {latestReading && latestReading.reading <= 140 && latestReading.reading >= 70 && (
-                                        <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-400 rounded-full border-2 border-white flex items-center justify-center">
-                                            <span className="text-[7px] text-white">✓</span>
-                                        </div>
-                                    )}
-                                </div>
-                                <div>
-                                    <h3 className="font-black text-sm text-primary-dark">
-                                        {lang === 'ar' ? 'حالة السكر' : 'Glucose Status'}
-                                    </h3>
-                                    <p className={`text-xs font-bold ${status.color}`}>{status.text}</p>
-                                </div>
-                            </div>
-                        </div>
-                        <button onClick={() => navigate('/health-tracking')}
-                            className="bg-gradient-to-br from-primary-dark to-primary-emerald text-white px-4 py-2 rounded-2xl text-xs font-black flex items-center gap-1.5 shadow-lg shadow-emerald-300/40 active:scale-95 transition">
-                            <Plus className="w-3.5 h-3.5" /> {lang === 'ar' ? 'قراءة' : 'Add'}
-                        </button>
-                    </div>
 
-                    {/* Big reading + sparkline */}
-                    <div className="flex items-end justify-between">
-                        <div>
-                            <p className="text-[2.5rem] font-black text-primary-dark leading-none tracking-tight">
-                                {latestReading ? latestReading.reading : '--'}
-                            </p>
-                            <p className="text-xs text-gray-400 font-bold mt-1">mg/dL • {latestReading ? getTypeLabel(latestReading.test_type) : ''}</p>
-                        </div>
-                        {chartData.length >= 2 && (
-                            <div className="mb-2">
-                                <MiniChart data={chartData}
-                                    color={latestReading && latestReading.reading > 140 ? '#ef4444' : '#10b981'} />
-                            </div>
-                        )}
-                    </div>
-
-                    {/* Bar chart */}
-                    {chartData.length >= 3 && (
-                        <div className="mt-2 pt-2 border-t border-gray-100/80">
-                            <div className="flex items-center justify-between mb-3">
-                                <span className="text-xs font-black text-gray-500">
-                                    {lang === 'ar' ? 'آخر القراءات' : 'Recent Trend'}
-                                </span>
-                                <button onClick={() => navigate('/reports')} className="text-[10px] text-primary-emerald font-bold flex items-center gap-0.5">
-                                    {lang === 'ar' ? 'التفاصيل' : 'Details'} <ArrowUpRight className="w-3 h-3" />
-                                </button>
-                            </div>
-                            <BarChart data={chartData} labels={chartLabels} lang={lang} />
-                            {/* Reference lines legend */}
-                            <div className="flex items-center justify-center gap-4 mt-3">
-                                <span className="flex items-center gap-1 text-[9px] text-gray-400">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-400" /> {lang === 'ar' ? 'طبيعي' : 'Normal'}
-                                </span>
-                                <span className="flex items-center gap-1 text-[9px] text-gray-400">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-amber-400" /> {lang === 'ar' ? 'منخفض' : 'Low'}
-                                </span>
-                                <span className="flex items-center gap-1 text-[9px] text-gray-400">
-                                    <span className="w-2.5 h-2.5 rounded-full bg-red-400" /> {lang === 'ar' ? 'مرتفع' : 'High'}
-                                </span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </motion.div>
 
             {/* ═══════ SECTIONS GRID ═══════ */}
             <div>
@@ -305,10 +219,10 @@ const HomeView = () => {
             <motion.div
                 initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
                 onClick={() => navigate('/market')}
-                className="relative overflow-hidden bg-gradient-to-br from-primary-dark via-[#1a8c65] to-primary-emerald p-5 rounded-[1.6rem] text-white shadow-xl shadow-emerald-300/30 cursor-pointer active:scale-[0.98] transition-all"
+                className="relative overflow-hidden bg-gradient-to-br from-sky-400 via-cyan-500 to-blue-500 p-5 rounded-[1.6rem] text-white shadow-xl shadow-sky-300/30 cursor-pointer active:scale-[0.98] transition-all"
             >
                 <div className="absolute top-[-30px] right-[-30px] w-48 h-48 bg-white/5 rounded-full blur-2xl" />
-                <div className="absolute bottom-[-20px] left-[-20px] w-32 h-32 bg-emerald-300/10 rounded-full blur-xl" />
+                <div className="absolute bottom-[-20px] left-[-20px] w-32 h-32 bg-cyan-300/10 rounded-full blur-xl" />
                 <div className="relative z-10 flex items-center justify-between">
                     <div>
                         <div className="flex items-center gap-2 mb-2">
@@ -317,9 +231,6 @@ const HomeView = () => {
                             </div>
                             <h3 className="font-black text-lg">{lang === 'ar' ? 'منتجات العناية بالسكري' : 'Diabetes Care Products'}</h3>
                         </div>
-                        <p className="text-white/70 text-xs font-bold">
-                            {lang === 'ar' ? 'أجهزة قياس · شرائط · إبر · مستلزمات' : 'Meters · Strips · Needles · Supplies'}
-                        </p>
                     </div>
                     <div className="bg-white/20 p-3 rounded-2xl backdrop-blur-sm">
                         <ArrowUpRight className="w-6 h-6" />
@@ -340,10 +251,10 @@ const HomeView = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                     {[
-                        { label: lang === 'ar' ? 'مساعدك الشخصي' : 'My Assistant', IconComp: HeartHandshake, path: '/personal-assistant', gradient: 'from-violet-500 to-purple-600', shadow: 'shadow-violet-200/50', desc: lang === 'ar' ? 'حاسبات صحية ومؤشرات' : 'Health calculators' },
-                        { label: lang === 'ar' ? 'حاسبة الإنسولين' : 'Insulin Calc', IconComp: Calculator, path: '/insulin-calculator', gradient: 'from-sky-500 to-blue-600', shadow: 'shadow-sky-200/50', desc: lang === 'ar' ? 'احسب جرعتك بدقة' : 'Calculate your dose' },
-                        { label: lang === 'ar' ? 'بطاقات العضوية' : 'Membership', IconComp: Sparkles, path: '/membership', gradient: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-200/50', desc: lang === 'ar' ? 'فضية · ذهبية · بلاتينية' : 'Silver · Gold · Platinum' },
-                        { label: lang === 'ar' ? 'السجل الصحي' : 'Health Record', IconComp: FileBarChart, path: '/health-record', gradient: 'from-rose-500 to-pink-600', shadow: 'shadow-rose-200/50', desc: lang === 'ar' ? 'تاريخك الطبي الكامل' : 'Full medical history' },
+                        { label: lang === 'ar' ? 'مساعدك الشخصي' : 'My Assistant', IconComp: HeartHandshake, path: '/personal-assistant', gradient: 'from-violet-500 to-purple-600', shadow: 'shadow-violet-200/50' },
+                        { label: lang === 'ar' ? 'حاسبة الإنسولين' : 'Insulin Calc', IconComp: Calculator, path: '/insulin-calculator', gradient: 'from-sky-500 to-blue-600', shadow: 'shadow-sky-200/50' },
+                        { label: lang === 'ar' ? 'بطاقات العضوية' : 'Membership', IconComp: Sparkles, path: '/membership', gradient: 'from-amber-400 to-orange-500', shadow: 'shadow-amber-200/50' },
+                        { label: lang === 'ar' ? 'السجل الصحي' : 'Health Record', IconComp: FileBarChart, path: '/health-record', gradient: 'from-rose-500 to-pink-600', shadow: 'shadow-rose-200/50' },
                     ].map((card, idx) => (
                         <motion.button key={idx}
                             initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
@@ -354,8 +265,7 @@ const HomeView = () => {
                             <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${card.gradient} flex items-center justify-center mb-2.5 shadow-lg`}>
                                 <card.IconComp className="w-6 h-6 text-white" />
                             </div>
-                            <h4 className="font-black text-xs text-gray-700 mb-0.5">{card.label}</h4>
-                            <p className="text-[9px] text-gray-400 leading-tight">{card.desc}</p>
+                            <h4 className="font-black text-xs text-gray-700">{card.label}</h4>
                         </motion.button>
                     ))}
                 </div>
@@ -395,42 +305,21 @@ const HomeView = () => {
                 </div>
             </motion.div>
 
-            {/* ═══════ SOCIAL MEDIA ═══════ */}
-            <div>
-                <h3 className="text-base font-black text-primary-dark flex items-center gap-2 mb-3">
-                    📱 {lang === 'ar' ? 'تابعنا على' : 'Follow Us'}
-                </h3>
-                <div className="flex gap-2.5 overflow-x-auto pb-1 no-scrollbar">
-                    {[
-                        { name: lang === 'ar' ? 'فيسبوك' : 'Facebook', icon: '📘', url: 'https://www.facebook.com/share/1AgTgtA3HT/', bg: 'from-blue-500 to-blue-700' },
-                        { name: lang === 'ar' ? 'تيك توك' : 'TikTok', icon: '🎵', url: 'https://www.tiktok.com/@diabetes.association?_t=ZS-8wKcU9b9teJ&_r=1', bg: 'from-gray-800 to-black' },
-                        { name: lang === 'ar' ? 'يوتيوب' : 'YouTube', icon: '📺', url: 'https://youtube.com/@diabetes.association?si=zkByS6yV9g5UST6L', bg: 'from-red-500 to-red-700' },
-                        { name: lang === 'ar' ? 'إنستاجرام' : 'Instagram', icon: '📷', url: 'https://www.instagram.com/diabetes.association?igsh=MXRuc3prYzF6YXVhYw==', bg: 'from-pink-500 to-purple-600' },
-                        { name: 'X', icon: '𝕏', url: 'https://x.com/Drvitamin4', bg: 'from-gray-900 to-black' },
-                        { name: lang === 'ar' ? 'سناب شات' : 'Snapchat', icon: '👻', url: 'https://www.snapchat.com/add/diabetes.care?share_id=djbd5DKCDEs&locale=en-US', bg: 'from-yellow-300 to-yellow-500' },
-                    ].map((s, i) => (
-                        <motion.a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
-                            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
-                            className={`flex-shrink-0 bg-gradient-to-br ${s.bg} px-4 py-3 rounded-2xl text-white text-center shadow-lg hover:shadow-xl hover:scale-[1.03] active:scale-95 transition-all min-w-[80px]`}
-                        >
-                            <span className="text-xl block mb-0.5">{s.icon}</span>
-                            <p className={`text-[9px] font-black ${s.bg.includes('yellow') ? 'text-gray-800' : ''}`}>{s.name}</p>
-                        </motion.a>
-                    ))}
-                </div>
-            </div>
+
 
             {/* ═══════ DIABETES GUIDE BOOK ═══════ */}
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}
-                onClick={() => navigate('/blog')}
+                onClick={() => navigate('/diabetes-education')}
                 className="bg-gradient-to-br from-emerald-500 to-teal-600 p-5 rounded-3xl text-white relative overflow-hidden cursor-pointer active:scale-[0.98] transition-all shadow-lg shadow-emerald-200/40"
             >
                 <div className="absolute top-[-20px] left-[-20px] w-32 h-32 bg-white/10 rounded-full blur-2xl" />
                 <div className="relative z-10 flex items-center justify-between">
                     <div>
-                        <h3 className="text-base font-black mb-0.5">{lang === 'ar' ? '📚 الدليل الشامل لمرضى السكري' : '📚 Diabetes Comprehensive Guide'}</h3>
-                        <p className="text-[10px] text-white/70">{lang === 'ar' ? 'متوفر الآن في 🇪🇬 مصر • 🇸🇦 السعودية • 🇦🇪 الإمارات • 📚 جرير' : 'Available in 🇪🇬 Egypt • 🇸🇦 Saudi • 🇦🇪 UAE • 📚 Jarir'}</p>
+                        <p className="text-white/80 text-[10px] font-bold mb-1">📝 {lang === 'ar' ? 'مدونة' : 'Blog'}</p>
+                        <h3 className="text-base font-black mb-0.5">{lang === 'ar' ? 'مدونة السكري' : 'Diabetes Blog'}</h3>
+                        <p className="text-[10px] text-white/70">{lang === 'ar' ? 'كورسات · دورات تعليمية · الدليل الشامل · كتب ومطبوعات' : 'Courses · Training · Comprehensive Guide · Books'}</p>
                     </div>
+                    <div className="text-4xl">📚</div>
                 </div>
             </motion.div>
 
@@ -466,57 +355,7 @@ const HomeView = () => {
                 </div>
             )}
 
-            {/* ═══════ RECENT READINGS ═══════ */}
-            <div className="pb-2">
-                <div className="flex justify-between items-center mb-3">
-                    <h3 className="text-base font-black text-primary-dark flex items-center gap-2">
-                        <Zap className="w-4.5 h-4.5 text-emerald-500" />
-                        {lang === 'ar' ? 'سجل القراءات' : 'Reading Log'}
-                    </h3>
-                    <button onClick={() => navigate('/reports')} className="text-primary-emerald text-xs font-bold flex items-center gap-0.5">
-                        {lang === 'ar' ? 'السجل' : 'All'} <ChevronLeft className="w-3.5 h-3.5 rtl:rotate-180" />
-                    </button>
-                </div>
-                <div className="space-y-2">
-                    {recentSugar.length > 0 ? recentSugar.slice(0, 5).map((read, i) => {
-                        const isHigh = read.reading > 140;
-                        const isLow = read.reading < 70;
-                        const dotColor = isHigh ? 'bg-red-500' : isLow ? 'bg-amber-400' : 'bg-emerald-500';
-                        const valColor = isHigh ? 'text-red-600' : isLow ? 'text-amber-600' : 'text-emerald-600';
-                        return (
-                            <motion.div key={read.id}
-                                initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: 0.15 + i * 0.06 }}
-                                className="premium-card p-4 flex items-center justify-between"
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-3 h-3 rounded-full ${dotColor} shadow-sm`} />
-                                    <div>
-                                        <p className="font-bold text-sm text-primary-dark">{getTypeLabel(read.test_type)}</p>
-                                        <p className="text-[10px] text-gray-400">{new Date(read.created_at).toLocaleString(lang === 'ar' ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
-                                    </div>
-                                </div>
-                                <div className="text-left">
-                                    <p className={`font-black text-lg ${valColor}`}>{read.reading}</p>
-                                    <p className="text-[9px] text-gray-400 font-bold">mg/dL</p>
-                                </div>
-                            </motion.div>
-                        );
-                    }) : (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                            className="text-center p-10 premium-card">
-                            <Activity className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                            <p className="text-gray-400 font-bold text-sm">
-                                {lang === 'ar' ? 'لا توجد قراءات بعد' : 'No readings yet'}
-                            </p>
-                            <button onClick={() => navigate('/health-tracking')}
-                                className="mt-3 text-primary-emerald text-sm font-black">
-                                {lang === 'ar' ? '+ سجّل أول قراءة' : '+ Add First Reading'}
-                            </button>
-                        </motion.div>
-                    )}
-                </div>
-            </div>
+
         </div>
     );
 };

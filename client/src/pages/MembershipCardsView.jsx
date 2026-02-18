@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
     Crown, Star, Check, ChevronLeft, Gift, Sparkles,
-    CreditCard, Loader2, X, Award, Heart, Search, Plus, User, Send, MessageCircle
+    CreditCard, Loader2, X, Award, Heart, Search, Plus, User, Send, MessageCircle,
+    Stethoscope, Apple, Dumbbell, Baby, ShieldCheck, ExternalLink
 } from 'lucide-react';
 import { API_BASE } from '../api/config';
+import { getUserCurrency, getCurrencySymbol } from '../utils/currencyUtils';
 
 const MembershipCardsView = () => {
     const { i18n } = useTranslation();
@@ -37,6 +39,13 @@ const MembershipCardsView = () => {
     const borderMap = { silver: 'border-slate-200', gold: 'border-amber-200', platinum: 'border-violet-200' };
     const gradientMap = { silver: 'from-gray-300 via-gray-100 to-gray-300', gold: 'from-yellow-300 via-amber-200 to-yellow-400', platinum: 'from-violet-300 via-purple-200 to-indigo-300' };
 
+    // Currency localization: map user currency to API price key
+    const currencyCode = getUserCurrency();
+    const currencyToPriceKey = { EGP: 'EG', SAR: 'SA', AED: 'AE', OMR: 'OM' };
+    const priceKey = currencyToPriceKey[currencyCode] || 'OTHER';
+    const currencySymbol = getCurrencySymbol(lang);
+    const getCardPrice = (card) => card.prices?.[priceKey] ?? card.prices?.SA ?? 0;
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -63,8 +72,8 @@ const MembershipCardsView = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     payment_type: 'membership',
-                    amount: card.prices?.SA || 0,
-                    currency: 'SAR',
+                    amount: getCardPrice(card),
+                    currency: currencyCode,
                     card_type: card.card_type,
                     user: { id: 1, name: 'User', email: 'user@app.com', phone: '0500000000' }
                 })
@@ -86,8 +95,8 @@ const MembershipCardsView = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     card_type: card.card_type,
-                    amount: card.prices?.SA || 0,
-                    currency: 'SAR',
+                    amount: getCardPrice(card),
+                    currency: currencyCode,
                 })
             });
             if (res.ok) {
@@ -252,8 +261,8 @@ const MembershipCardsView = () => {
                                         <div className="text-white/80">{iconMap[card.card_type] || <Star className="w-8 h-8" />}</div>
                                     </div>
                                     <div className="mt-4 flex items-end gap-1 text-white">
-                                        <span className="text-3xl font-black">{card.prices?.SA || 0}</span>
-                                        <span className="text-sm font-bold text-white/70 mb-1">SAR / {lang === 'ar' ? 'سنوياً' : 'year'}</span>
+                                        <span className="text-3xl font-black">{getCardPrice(card)}</span>
+                                        <span className="text-sm font-bold text-white/70 mb-1">{currencySymbol} / {lang === 'ar' ? 'سنوياً' : 'year'}</span>
                                     </div>
                                     <div className="absolute bottom-3 left-5 flex gap-1.5">
                                         {[...Array(4)].map((_, i) => <div key={i} className="w-6 h-1 bg-white/20 rounded-full" />)}
@@ -278,6 +287,119 @@ const MembershipCardsView = () => {
                                     className={`w-full bg-gradient-to-l ${cardBgMap[card.card_type] || 'from-gray-400 to-gray-600'} text-white py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg hover:shadow-xl active:scale-[0.98] transition-all`}>
                                     <CreditCard className="w-5 h-5" />
                                     {lang === 'ar' ? 'اطلب الآن' : 'Order Now'}
+                                </button>
+                            </div>
+                        </motion.div>
+                    );
+                })}
+            </div>
+
+            {/* ===== Service Booking Packages ===== */}
+            <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-5 h-5 text-primary-emerald" />
+                    <h2 className="text-lg font-black text-primary-dark">{lang === 'ar' ? 'باقات الخدمات الطبية' : 'Medical Service Packages'}</h2>
+                </div>
+                <p className="text-xs text-gray-400">{lang === 'ar' ? 'اختر الباقة المناسبة واحجز عبر النموذج' : 'Choose a package and book via the form'}</p>
+
+                {[
+                    {
+                        id: 'consultation',
+                        name: lang === 'ar' ? 'استشارة طبية' : 'Medical Consultation',
+                        desc: lang === 'ar' ? 'جلسة استشارية مع طبيب مختص بالسكري' : 'Consultation session with a diabetes specialist',
+                        price: 150,
+                        icon: Stethoscope,
+                        gradient: 'from-blue-500 to-cyan-600',
+                        shadow: 'shadow-blue-200/50',
+                        features: lang === 'ar'
+                            ? ['استشارة فردية 30 دقيقة', 'تقييم شامل للحالة', 'خطة علاجية مخصصة', 'متابعة لمدة أسبوع']
+                            : ['30-min individual session', 'Comprehensive assessment', 'Custom treatment plan', '1-week follow-up'],
+                    },
+                    {
+                        id: 'nutrition',
+                        name: lang === 'ar' ? 'خطة تغذية' : 'Nutrition Plan',
+                        desc: lang === 'ar' ? 'خطة غذائية مخصصة لمرضى السكري' : 'Custom nutrition plan for diabetes patients',
+                        price: 200,
+                        icon: Apple,
+                        gradient: 'from-emerald-500 to-green-600',
+                        shadow: 'shadow-emerald-200/50',
+                        features: lang === 'ar'
+                            ? ['تقييم غذائي كامل', 'خطة وجبات 4 أسابيع', 'قائمة بدائل غذائية', 'حساب السعرات والكربوهيدرات']
+                            : ['Full dietary assessment', '4-week meal plan', 'Food alternatives list', 'Calorie & carb counting'],
+                    },
+                    {
+                        id: 'fitness',
+                        name: lang === 'ar' ? 'باقة لياقة' : 'Fitness Package',
+                        desc: lang === 'ar' ? 'برنامج رياضي آمن لمرضى السكري' : 'Safe exercise program for diabetes patients',
+                        price: 180,
+                        icon: Dumbbell,
+                        gradient: 'from-orange-500 to-red-500',
+                        shadow: 'shadow-orange-200/50',
+                        features: lang === 'ar'
+                            ? ['تقييم لياقة بدنية', 'برنامج تمارين 4 أسابيع', 'إرشادات السكر أثناء الرياضة', 'متابعة أسبوعية']
+                            : ['Physical fitness assessment', '4-week exercise program', 'Blood sugar exercise guidelines', 'Weekly follow-up'],
+                    },
+                    {
+                        id: 'child',
+                        name: lang === 'ar' ? 'طفل سكري' : 'Diabetic Child Care',
+                        desc: lang === 'ar' ? 'رعاية متخصصة للأطفال المصابين بالسكري' : 'Specialized care for diabetic children',
+                        price: 250,
+                        icon: Baby,
+                        gradient: 'from-purple-500 to-violet-600',
+                        shadow: 'shadow-purple-200/50',
+                        features: lang === 'ar'
+                            ? ['استشارة طبيب أطفال سكري', 'خطة غذائية للطفل', 'إرشادات الأهل', 'متابعة شهرية']
+                            : ['Pediatric diabetes consult', 'Child nutrition plan', 'Parent guidance', 'Monthly follow-up'],
+                    },
+                    {
+                        id: 'comprehensive',
+                        name: lang === 'ar' ? 'رعاية شاملة' : 'Comprehensive Care',
+                        desc: lang === 'ar' ? 'باقة شاملة تجمع جميع الخدمات' : 'Complete package combining all services',
+                        price: 500,
+                        icon: ShieldCheck,
+                        gradient: 'from-amber-500 to-yellow-600',
+                        shadow: 'shadow-amber-200/50',
+                        features: lang === 'ar'
+                            ? ['استشارة طبية كاملة', 'خطة تغذية مخصصة', 'برنامج لياقة', 'متابعة شهرية لمدة 3 أشهر', 'تقارير دورية']
+                            : ['Full medical consultation', 'Custom nutrition plan', 'Fitness program', '3-month follow-up', 'Periodic reports'],
+                    },
+                ].map((pkg, idx) => {
+                    const IconComp = pkg.icon;
+                    return (
+                        <motion.div key={pkg.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: idx * 0.1 }}
+                            className="bg-white rounded-3xl shadow-md border border-gray-100 overflow-hidden">
+                            <div className={`bg-gradient-to-br ${pkg.gradient} p-5 relative overflow-hidden`}>
+                                <div className="absolute top-[-15px] right-[-15px] w-24 h-24 bg-white/10 rounded-full blur-xl" />
+                                <div className="relative flex items-center justify-between text-white">
+                                    <div>
+                                        <p className="font-black text-lg">{pkg.name}</p>
+                                        <p className="text-white/70 text-xs mt-1">{pkg.desc}</p>
+                                    </div>
+                                    <div className="bg-white/20 backdrop-blur-sm p-3 rounded-2xl">
+                                        <IconComp className="w-7 h-7" />
+                                    </div>
+                                </div>
+                                <div className="mt-3 flex items-end gap-1 text-white">
+                                    <span className="text-3xl font-black">{pkg.price}</span>
+                                    <span className="text-sm font-bold text-white/70 mb-1">SAR</span>
+                                </div>
+                            </div>
+                            <div className="p-5 space-y-4">
+                                <div className="space-y-2.5">
+                                    {pkg.features.map((feat, i) => (
+                                        <div key={i} className="flex items-start gap-2.5">
+                                            <Check className="w-4 h-4 text-emerald-500 mt-0.5 flex-shrink-0" />
+                                            <span className="text-sm font-bold text-gray-600">{feat}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button
+                                    onClick={() => window.open(`https://docs.google.com/forms/d/e/GOOGLE_FORM_ID/viewform?usp=pp_url&entry.FIELD_ID=${encodeURIComponent(pkg.name)}`, '_blank')}
+                                    data-testid={`button-book-${pkg.id}`}
+                                    className={`w-full bg-gradient-to-l ${pkg.gradient} text-white py-3.5 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg ${pkg.shadow} active:scale-[0.98] transition`}>
+                                    <ExternalLink className="w-4 h-4" />
+                                    {lang === 'ar' ? 'احجز الآن' : 'Book Now'}
                                 </button>
                             </div>
                         </motion.div>

@@ -196,8 +196,21 @@ class DataService {
         return this.fetchWithCache('/api/v1/admin/cms/notifications', 'notifications', { maxAge: 60 * 1000 }); // 1 min cache
     }
 
-    static async getBanners() {
-        return this.fetchWithCache('/api/v1/admin/cms/banners', 'banners', { maxAge: 10 * 60 * 1000 });
+    static async getBanners(section = null) {
+        const url = section ? `/api/v1/admin/cms/banners?section=${section}` : '/api/v1/admin/cms/banners';
+        return this.fetchWithCache(url, `banners_${section || 'all'}`, { maxAge: 10 * 60 * 1000 });
+    }
+
+    static async getAppSettings() {
+        const result = await this.fetchWithCache('/api/v1/admin/settings', 'app_settings', { maxAge: 5 * 60 * 1000 }); // 5 min cache
+        // Flatten grouped settings into a single key-value object
+        const flat = {};
+        if (result && result.data) {
+            Object.values(result.data).flat().forEach(s => {
+                flat[s.key] = s.value;
+            });
+        }
+        return { data: flat };
     }
 
     // ============ NOTIFICATION HELPERS ============

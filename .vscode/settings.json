@@ -1,0 +1,8 @@
+{
+    "java.configuration.runtimes": [],
+    "java.jdt.ls.java.home": "",
+    "java.import.gradle.enabled": false,
+    "java.import.maven.enabled": false,
+    "java.autobuild.enabled": false,
+    "java.enabled": false
+}

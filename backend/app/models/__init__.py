@@ -8,7 +8,8 @@ from app.models.services import MedicalTest, NursingService, NursingBooking
 from app.models.activity import ActivityLog, Permission, Appointment
 from app.models.membership import (
     MembershipCard, UserMembership, SocialLink, BlogCourse,
-    BookLink, MedicalProfile, ConsultationPackage, UserFavorite
+    BookLink, MedicalProfile, ConsultationPackage, UserFavorite,
+    UserPackageOrder, MembershipServiceUsage, MarketingMessage
 )
 from app.models.seller import (
     SellerNotification, OrderStatusHistory, OrderReturn,

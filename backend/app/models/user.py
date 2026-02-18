@@ -14,6 +14,8 @@ class User(Base):
     age = Column(String(10))
     weight = Column(String(10))
     country = Column(String(255))
+    city = Column(String(255), nullable=True)
+    gender = Column(String(20), nullable=True)  # male, female
     shape = Column(String(255))
     login_method = Column(String(50), default="email")  # email or google
     role = Column(String(20), default="user")  # user, admin, moderator, doctor, seller, nurse
@@ -24,6 +26,15 @@ class User(Base):
     app_display_name = Column(String(255), nullable=True)     # اسم البائع في التطبيق - يظهر في تفاصيل المنتج
     seller_department = Column(String(100), nullable=True)    # القسم: diabetes_care, medical_tests, home_nursing
     seller_address = Column(Text, nullable=True)              # عنوان البائع
+
+    # === Lab-specific fields (only used when role=lab) ===
+    lab_name = Column(String(255), nullable=True)             # اسم المعمل
+    lab_address = Column(Text, nullable=True)                 # عنوان المعمل
+    lab_license_number = Column(String(100), nullable=True)   # رقم ترخيص المعمل
+
+    # === Nursing-specific fields (only used when role=nurse) ===
+    nursing_center_name = Column(String(255), nullable=True)  # اسم مركز التمريض
+    nursing_address = Column(Text, nullable=True)             # عنوان مركز التمريض
 
     # === Wallet & Loyalty ===
     wallet_balance = Column(Float, default=0.0)               # رصيد المحفظة

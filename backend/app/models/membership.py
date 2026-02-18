@@ -103,11 +103,18 @@ class MedicalProfile(Base):
     is_smoker = Column(Boolean, default=False)
     daily_exercise = Column(Boolean, default=False)
     diabetes_type = Column(String(50))  # type1, type2, gestational
-    medications = Column(Text)  # JSON list
+    diagnosis_date = Column(String(20))  # YYYY-MM-DD
+    blood_type = Column(String(10))  # A+, A-, B+, B-, AB+, AB-, O+, O-
+    hba1c = Column(String(10))  # last HbA1c value
+    insulin_type = Column(String(255))  # e.g., Lantus, NovoRapid
+    height = Column(String(10))  # in cm
+    medications = Column(Text)  # JSON list or text
     meals_per_day = Column(Integer, default=3)
     allergies = Column(Text)
+    chronic_diseases = Column(Text)  # other chronic diseases
+    emergency_contact = Column(String(50))  # emergency phone number
     medical_notes = Column(Text)
-    attachments = Column(Text)  # JSON list of file paths
+    attachments = Column(Text)  # JSON list of file paths/data
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
@@ -162,4 +169,40 @@ class UserPackageOrder(Base):
     payment_method = Column(String(50), default="direct")
     start_date = Column(String(20))
     end_date = Column(String(20))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MembershipServiceUsage(Base):
+    """Track services used with membership card discounts."""
+    __tablename__ = "sukarak_membership_usage"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("sukarak_users.id"), nullable=False)
+    membership_id = Column(Integer, ForeignKey("sukarak_user_memberships.id"), nullable=False)
+    service_type = Column(String(50), nullable=False)  # consultation, lab, nursing, store
+    service_name = Column(String(255))
+    original_price = Column(Float, default=0)
+    discounted_price = Column(Float, default=0)
+    discount_amount = Column(Float, default=0)
+    reference_id = Column(Integer)  # order_id, booking_id, etc.
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class MarketingMessage(Base):
+    """Marketing messages/campaigns sent via WhatsApp, email, or push."""
+    __tablename__ = "sukarak_marketing_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String(255), nullable=False)
+    body = Column(Text, nullable=False)
+    channel = Column(String(20), nullable=False)  # whatsapp, email, push, all
+    target_audience = Column(String(50), default="all")  # all, vip, country:EG, membership:gold
+    image_url = Column(String(512))
+    link_url = Column(String(512))
+    scheduled_at = Column(DateTime(timezone=True))
+    sent_at = Column(DateTime(timezone=True))
+    status = Column(String(20), default="draft")  # draft, scheduled, sent, cancelled
+    sent_count = Column(Integer, default=0)
+    opened_count = Column(Integer, default=0)
+    created_by = Column(Integer, ForeignKey("sukarak_users.id"))
     created_at = Column(DateTime(timezone=True), server_default=func.now())

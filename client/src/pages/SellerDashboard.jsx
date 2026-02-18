@@ -39,7 +39,7 @@ const SellerDashboard = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [showProductModal, setShowProductModal] = useState(false);
     const [editingProduct, setEditingProduct] = useState(null);
-    const [productForm, setProductForm] = useState({ title: '', details: '', price: '', stock: '', category: '', sub_category: '', offer_price: '', brand: '', sku: '', offer_start_date: '', offer_end_date: '' });
+    const [productForm, setProductForm] = useState({ title: '', details: '', price: '', stock: '', category: '', sub_category: '', offer_price: '', brand: '', sku: '', offer_start_date: '', offer_end_date: '', returnable: true });
     const [productImage, setProductImage] = useState(null);
     const [saving, setSaving] = useState(false);
     const [notifications, setNotifications] = useState([]);
@@ -171,58 +171,95 @@ const SellerDashboard = () => {
                 </div>
             </aside>
 
-            <main className="flex-1 p-6 overflow-y-auto">
+            <main className="flex-1 p-6 overflow-y-auto relative">
                 <header className="flex justify-between items-center mb-6">
                     <h1 className="text-2xl font-black">{sideItems.find(i => i.id === tab)?.label}</h1>
-                    <div className="flex gap-3 items-center">
+                    <div className="flex gap-3 items-center relative">
                         <button onClick={load} className="p-2.5 bg-white/[0.05] rounded-xl hover:bg-white/[0.1] transition" title="تحديث"><RefreshCw className="w-4 h-4" /></button>
                         <button onClick={() => setShowNotifPanel(!showNotifPanel)} className="p-2.5 bg-white/[0.05] rounded-xl relative hover:bg-white/[0.1] transition" title="الإشعارات">
                             <Bell className="w-4 h-4" />
                             {unreadCount > 0 && <span className="absolute -top-1 -left-1 bg-red-500 text-[8px] w-4 h-4 rounded-full flex items-center justify-center">{unreadCount}</span>}
                         </button>
-                        {/* زر الخروج للموبايل */}
+                        {/* Notifications Dropdown */}
+                        {showNotifPanel && (
+                            <div className={`absolute left-0 top-12 w-96 max-h-[480px] ${glass} rounded-2xl shadow-2xl z-50 overflow-hidden`}>
+                                <div className="p-4 border-b border-white/[0.06] flex items-center justify-between">
+                                    <h3 className="font-black text-sm flex items-center gap-2"><Bell className="w-4 h-4 text-emerald-400" /> الإشعارات</h3>
+                                    <div className="flex gap-2">
+                                        {unreadCount > 0 && <button onClick={markAllRead} className="text-[10px] text-emerald-400 font-bold hover:underline">تعليم الكل كمقروء</button>}
+                                        <button onClick={() => setShowNotifPanel(false)} className="text-white/30 hover:text-white"><X className="w-4 h-4" /></button>
+                                    </div>
+                                </div>
+                                <div className="overflow-y-auto max-h-[380px]">
+                                    {notifications.length === 0 ? (
+                                        <div className="p-8 text-center">
+                                            <Bell className="w-10 h-10 mx-auto opacity-10 mb-3" />
+                                            <p className="text-white/20 text-sm font-bold">لا توجد إشعارات</p>
+                                        </div>
+                                    ) : notifications.map(n => (
+                                        <div key={n.id} className={`p-4 border-b border-white/[0.04] hover:bg-white/[0.03] cursor-pointer transition ${!n.is_read ? 'bg-emerald-500/[0.03]' : ''}`}
+                                            onClick={async () => { if (!n.is_read) { await fetch(`${API}/notifications/${n.id}/read`, { method: 'PUT' }); setNotifications(ns => ns.map(x => x.id === n.id ? { ...x, is_read: true } : x)); setUnreadCount(c => Math.max(0, c - 1)); } setSelectedNotif(n); }}>
+                                            <div className="flex items-start gap-3">
+                                                <span className="text-lg mt-0.5">{notifIcons[n.type] || '🔔'}</span>
+                                                <div className="flex-1 min-w-0">
+                                                    <div className="flex items-center gap-2">
+                                                        <p className={`text-sm font-bold truncate ${!n.is_read ? 'text-white' : 'text-white/50'}`}>{n.title}</p>
+                                                        {!n.is_read && <span className="w-2 h-2 bg-emerald-400 rounded-full flex-shrink-0"></span>}
+                                                    </div>
+                                                    <p className="text-[11px] text-white/30 mt-0.5 line-clamp-2">{n.message}</p>
+                                                    <p className="text-[9px] text-white/15 mt-1">{fmt(n.created_at)}</p>
+                                                </div>
+                                                {n.priority === 'high' && <span className="text-[8px] bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-md font-black">!!</span>}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                         <button onClick={() => { localStorage.removeItem('admin_user'); localStorage.removeItem('admin_token'); window.location.href = '/admin/login'; }} className="p-2.5 bg-red-500/10 rounded-xl hover:bg-red-500/20 transition text-red-400" title="تسجيل الخروج">
                             <LogOut className="w-4 h-4" />
                         </button>
                     </div>
                 </header>
+                {/* Click away to close notif */}
+                {showNotifPanel && <div className="fixed inset-0 z-40" onClick={() => setShowNotifPanel(false)} />}
 
                 {tab === 'dashboard' && stats && (
                     <div className="space-y-6">
-                        <div className="grid grid-cols-4 gap-6">
+                        <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                             {[
-                                { label: 'إجمالي المبيعات', value: stats.total_revenue, icon: DollarSign, color: 'from-emerald-500 to-teal-600' },
+                                { label: 'إجمالي المبيعات', value: stats.total_revenue, icon: DollarSign, color: 'from-emerald-500 to-teal-600', suffix: ' SAR' },
                                 { label: 'طلبات جديدة', value: stats.pending_orders, icon: Bell, color: 'from-amber-500 to-orange-600' },
                                 { label: 'تم التوصيل', value: stats.delivered_orders, icon: CheckCircle, color: 'from-blue-500 to-indigo-600' },
                                 { label: 'المنتجات', value: stats.total_products, icon: ShoppingBag, color: 'from-purple-500 to-fuchsia-600' },
                             ].map((c, i) => (
                                 <div key={i} className={`bg-gradient-to-br ${c.color} p-6 rounded-3xl shadow-xl`}>
                                     <c.icon className="w-8 h-8 opacity-20 mb-4" />
-                                    <p className="text-2xl font-black">{c.value}</p>
+                                    <p className="text-2xl font-black">{c.value}{c.suffix || ''}</p>
                                     <p className="text-white/60 text-xs font-bold">{c.label}</p>
                                 </div>
                             ))}
                         </div>
 
-                        <div className="grid grid-cols-2 gap-6">
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                             <div className={`${glass} p-6 rounded-3xl`}>
                                 <h3 className="font-black mb-4">الأكثر مبيعاً</h3>
-                                {stats.top_products?.map((p, i) => (
+                                {stats.top_products?.length ? stats.top_products.map((p, i) => (
                                     <div key={i} className="flex items-center gap-3 py-2">
                                         <span className="text-xs text-white/20 font-bold w-4">{i + 1}</span>
                                         <p className="text-xs font-bold flex-1">{p.name}</p>
                                         <p className="text-xs font-black text-emerald-400">{p.sales} SAR</p>
                                     </div>
-                                ))}
+                                )) : <p className="text-white/20 text-sm">لا توجد مبيعات بعد</p>}
                             </div>
                             <div className={`${glass} p-6 rounded-3xl`}>
                                 <h3 className="font-black mb-4">آخر الطلبات</h3>
-                                {orders.slice(0, 5).map(o => (
+                                {orders.length ? orders.slice(0, 5).map(o => (
                                     <div key={o.id} className="flex items-center justify-between py-2">
                                         <p className="text-xs font-bold">{o.order_number}</p>
                                         <span className={`text-[10px] px-2 py-0.5 rounded-full ${statusConfig[o.status]?.light} ${statusConfig[o.status]?.text}`}>{statusConfig[o.status]?.label}</span>
                                     </div>
-                                ))}
+                                )) : <p className="text-white/20 text-sm">لا توجد طلبات بعد</p>}
                             </div>
                         </div>
                     </div>
@@ -250,7 +287,7 @@ const SellerDashboard = () => {
                                         <p className="text-[10px] text-white/20">المخزون: {p.stock}</p>
                                     </div>
                                     <div className="flex gap-2 mt-4">
-                                        <button onClick={() => { setEditingProduct(p); setProductForm({ title: p.title, details: p.details || '', price: p.price, stock: p.stock, category: p.category || '', sub_category: p.sub_category || '', offer_price: p.offer_price || '' }); setShowProductModal(true); }} className="flex-1 bg-white/5 p-2 rounded-lg text-[10px] font-bold">تعديل</button>
+                                        <button onClick={() => { setEditingProduct(p); setProductForm({ title: p.title, details: p.details || '', price: p.price, stock: p.stock, category: p.category || '', sub_category: p.sub_category || '', offer_price: p.offer_price || '', returnable: p.returnable !== false }); setShowProductModal(true); }} className="flex-1 bg-white/5 p-2 rounded-lg text-[10px] font-bold">تعديل</button>
                                         <button onClick={() => deleteProduct(p.id)} className="bg-red-500/10 text-red-400 p-2 rounded-lg"><Trash2 className="w-4 h-4" /></button>
                                     </div>
                                 </div>
@@ -552,6 +589,19 @@ const SellerDashboard = () => {
                             </div>
                         ) : (
                             <>
+                                {/* Export Buttons */}
+                                <div className="flex gap-3 flex-wrap">
+                                    <button onClick={async () => { const { exportSellerReport } = await import('../utils/ExportUtils'); exportSellerReport(salesReport, products, orders); }} className="flex items-center gap-2 bg-red-500/20 text-red-400 px-5 py-2.5 rounded-xl font-black text-xs hover:bg-red-500/30 transition">
+                                        <FileDown className="w-4 h-4" /> تصدير PDF
+                                    </button>
+                                    <button onClick={async () => { const { exportToExcel } = await import('../utils/ExportUtils'); exportToExcel(orders.map(o => ({ 'رقم الطلب': o.order_number, 'العميل': o.customer_name, 'المبلغ': o.total, 'الحالة': o.status, 'التاريخ': o.created_at })), 'تقرير_المبيعات'); }} className="flex items-center gap-2 bg-emerald-500/20 text-emerald-400 px-5 py-2.5 rounded-xl font-black text-xs hover:bg-emerald-500/30 transition">
+                                        <FileSpreadsheet className="w-4 h-4" /> تصدير Excel
+                                    </button>
+                                    <button onClick={() => window.print()} className="flex items-center gap-2 bg-blue-500/20 text-blue-400 px-5 py-2.5 rounded-xl font-black text-xs hover:bg-blue-500/30 transition">
+                                        <Printer className="w-4 h-4" /> طباعة
+                                    </button>
+                                </div>
+
                                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                                     {[
                                         { label: 'إجمالي المبيعات', value: `${salesReport.total_sales || 0} SAR`, color: 'from-emerald-500 to-teal-600' },
@@ -565,19 +615,55 @@ const SellerDashboard = () => {
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Visual Bar Chart */}
                                 {salesReport.by_category && (
                                     <div className={`${glass} rounded-3xl p-6`}>
                                         <h3 className="font-black mb-4">المبيعات حسب القسم</h3>
-                                        <div className="space-y-3">
-                                            {Object.entries(salesReport.by_category).map(([cat, val]) => (
-                                                <div key={cat} className="flex justify-between items-center py-2 border-b border-white/[0.04]">
-                                                    <span className="text-sm font-bold">{categoryLabels[cat] || cat}</span>
-                                                    <span className="text-emerald-400 font-black">{val} SAR</span>
-                                                </div>
-                                            ))}
+                                        <div className="space-y-4">
+                                            {(() => {
+                                                const entries = Object.entries(salesReport.by_category); const maxVal = Math.max(...entries.map(([, v]) => Number(v) || 0), 1); return entries.map(([cat, val]) => (
+                                                    <div key={cat}>
+                                                        <div className="flex justify-between items-center mb-1">
+                                                            <span className="text-sm font-bold">{getCategoryLabel(cat) || cat}</span>
+                                                            <span className="text-emerald-400 font-black text-sm">{val} SAR</span>
+                                                        </div>
+                                                        <div className="w-full bg-white/[0.05] rounded-full h-3 overflow-hidden">
+                                                            <div className="bg-gradient-to-l from-emerald-500 to-teal-600 h-full rounded-full transition-all duration-700" style={{ width: `${(Number(val) / maxVal * 100).toFixed(0)}%` }} />
+                                                        </div>
+                                                    </div>
+                                                ));
+                                            })()}
                                         </div>
                                     </div>
                                 )}
+
+                                {/* Recent Orders Table */}
+                                <div className={`${glass} rounded-3xl p-6`}>
+                                    <h3 className="font-black mb-4">آخر الطلبات</h3>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm">
+                                            <thead><tr className="text-white/30 text-[10px] border-b border-white/[0.06]">
+                                                <th className="py-3 text-right font-black">رقم الطلب</th>
+                                                <th className="py-3 text-right font-black">العميل</th>
+                                                <th className="py-3 text-right font-black">المبلغ</th>
+                                                <th className="py-3 text-right font-black">الحالة</th>
+                                                <th className="py-3 text-right font-black">التاريخ</th>
+                                            </tr></thead>
+                                            <tbody>
+                                                {orders.slice(0, 10).map(o => (
+                                                    <tr key={o.id} className="border-b border-white/[0.03]">
+                                                        <td className="py-3 font-bold">#{o.order_number || o.id}</td>
+                                                        <td className="py-3 text-white/60">{o.customer_name || '-'}</td>
+                                                        <td className="py-3 text-emerald-400 font-black">{o.total || 0} SAR</td>
+                                                        <td className="py-3"><span className={`px-2 py-1 rounded-lg text-[10px] font-black ${statusConfig[o.status]?.light || 'bg-gray-500/15'} ${statusConfig[o.status]?.text || 'text-gray-400'}`}>{statusConfig[o.status]?.label || o.status}</span></td>
+                                                        <td className="py-3 text-white/30 text-[10px]">{fmt(o.created_at)}</td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                             </>
                         )}
                     </div>
@@ -586,27 +672,66 @@ const SellerDashboard = () => {
                 {/* ═══════ RETURNS TAB ═══════ */}
                 {tab === 'returns' && (
                     <div className="space-y-6">
+                        {/* Returns Summary */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className={`${glass} rounded-2xl p-5`}>
+                                <p className="text-2xl font-black text-amber-400">{returns.filter(r => r.status === 'pending').length}</p>
+                                <p className="text-white/40 text-xs font-bold">قيد المراجعة</p>
+                            </div>
+                            <div className={`${glass} rounded-2xl p-5`}>
+                                <p className="text-2xl font-black text-emerald-400">{returns.filter(r => r.status === 'approved').length}</p>
+                                <p className="text-white/40 text-xs font-bold">مقبول</p>
+                            </div>
+                            <div className={`${glass} rounded-2xl p-5`}>
+                                <p className="text-2xl font-black text-red-400">{returns.filter(r => r.status === 'rejected').length}</p>
+                                <p className="text-white/40 text-xs font-bold">مرفوض</p>
+                            </div>
+                        </div>
+
                         {returns.length === 0 ? (
                             <div className={`${glass} rounded-3xl p-12 text-center`}>
                                 <RotateCcw className="w-12 h-12 mx-auto opacity-10 mb-4" />
                                 <p className="text-white/30 font-bold">لا توجد مرتجعات</p>
+                                <p className="text-white/15 text-xs mt-2">سيظهر هنا طلبات الإرجاع من العملاء (خلال 7 أيام من تاريخ الطلب)</p>
                             </div>
                         ) : (
                             <div className="space-y-4">
-                                {returns.map(r => (
-                                    <div key={r.id} className={`${glass} rounded-3xl p-5`}>
-                                        <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-black text-sm">طلب #{r.order_number}</p>
-                                                <p className="text-[10px] text-white/30 mt-1">{r.reason}</p>
-                                                <p className="text-[10px] text-white/20 mt-1">{fmt(r.created_at)}</p>
+                                {returns.map(r => {
+                                    const daysSinceOrder = r.order_date ? Math.floor((Date.now() - new Date(r.order_date).getTime()) / 86400000) : null;
+                                    const withinWindow = daysSinceOrder !== null && daysSinceOrder <= 7;
+                                    return (
+                                        <div key={r.id} className={`${glass} rounded-3xl p-5 space-y-3`}>
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-black text-sm">طلب #{r.order_number}</p>
+                                                    {r.product_name && <p className="text-xs text-white/50 mt-0.5">{r.product_name}</p>}
+                                                    <p className="text-[10px] text-white/30 mt-1">السبب: {r.reason}</p>
+                                                    <p className="text-[10px] text-white/20 mt-1">{fmt(r.created_at)}</p>
+                                                    {daysSinceOrder !== null && (
+                                                        <p className={`text-[10px] mt-1 font-bold ${withinWindow ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                            {withinWindow ? `✅ ضمن فترة الإرجاع (${daysSinceOrder} يوم)` : `⚠️ انتهت فترة الإرجاع (${daysSinceOrder} يوم)`}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <span className={`px-3 py-1 rounded-lg text-[10px] font-black ${r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400' : r.status === 'rejected' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
+                                                    {r.status === 'approved' ? 'مقبول' : r.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
+                                                </span>
                                             </div>
-                                            <span className={`px-3 py-1 rounded-lg text-[10px] font-black ${r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-400' : r.status === 'rejected' ? 'bg-red-500/10 text-red-400' : 'bg-amber-500/10 text-amber-400'}`}>
-                                                {r.status === 'approved' ? 'مقبول' : r.status === 'rejected' ? 'مرفوض' : 'قيد المراجعة'}
-                                            </span>
+                                            {r.status === 'pending' && (
+                                                <div className="flex gap-3 pt-2 border-t border-white/[0.06]">
+                                                    <button onClick={async () => { await fetch(`${API}/returns/${r.id}/approve?seller_id=${seller.id}`, { method: 'PUT' }); toast('تم قبول الإرجاع ✅'); loadTabData('returns'); }}
+                                                        className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/15 text-emerald-400 py-2.5 rounded-xl font-black text-xs hover:bg-emerald-500/25 transition">
+                                                        <CheckCircle className="w-4 h-4" /> قبول الإرجاع
+                                                    </button>
+                                                    <button onClick={async () => { await fetch(`${API}/returns/${r.id}/reject?seller_id=${seller.id}`, { method: 'PUT' }); toast('تم رفض الإرجاع'); loadTabData('returns'); }}
+                                                        className="flex-1 flex items-center justify-center gap-2 bg-red-500/15 text-red-400 py-2.5 rounded-xl font-black text-xs hover:bg-red-500/25 transition">
+                                                        <XCircle className="w-4 h-4" /> رفض
+                                                    </button>
+                                                </div>
+                                            )}
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                     </div>
@@ -711,6 +836,7 @@ const SellerDashboard = () => {
                             if (productForm.offer_start_date) formData.append('offer_start_date', productForm.offer_start_date);
                             if (productForm.offer_end_date) formData.append('offer_end_date', productForm.offer_end_date);
                             if (productImage) formData.append('image', productImage);
+                            formData.append('returnable', productForm.returnable ? '1' : '0');
                             try {
                                 const url = editingProduct ? `${API}/products/${editingProduct.id}` : `${API}/products`;
                                 const method = editingProduct ? 'PUT' : 'POST';
@@ -718,9 +844,10 @@ const SellerDashboard = () => {
                                 toast(editingProduct ? 'تم تعديل المنتج ✅' : 'تم إضافة المنتج ✅');
                                 setShowProductModal(false);
                                 setEditingProduct(null);
-                                setProductForm({ title: '', details: '', price: '', stock: '', category: '', sub_category: '', offer_price: '', brand: '', sku: '', offer_start_date: '', offer_end_date: '' });
+                                setProductForm({ title: '', details: '', price: '', stock: '', category: '', sub_category: '', offer_price: '', brand: '', sku: '', offer_start_date: '', offer_end_date: '', returnable: true });
                                 setProductImage(null);
                                 loadTabData(tab);
+                                load();
                             } catch (err) { toast('حدث خطأ'); }
                             setSaving(false);
                         }}>
@@ -780,6 +907,14 @@ const SellerDashboard = () => {
                                 <label className="block text-white/30 text-[10px] font-black mb-1.5">صورة المنتج</label>
                                 <input type="file" accept="image/*" onChange={e => setProductImage(e.target.files[0])} className={inputStyle} />
                             </div>
+                            {/* Returnable Toggle */}
+                            <label className="flex items-center gap-3 cursor-pointer bg-white/[0.03] border border-white/[0.06] rounded-2xl px-4 py-3">
+                                <input type="checkbox" checked={productForm.returnable} onChange={e => setProductForm({ ...productForm, returnable: e.target.checked })} className="accent-emerald-500 w-4 h-4" />
+                                <div>
+                                    <span className="text-sm font-bold text-white/70">قابل للإرجاع</span>
+                                    <p className="text-[9px] text-white/30">إذا تم إلغاء التفعيل لن يظهر المنتج في قائمة الإرجاع</p>
+                                </div>
+                            </label>
                             <button type="submit" disabled={saving} className="w-full bg-gradient-to-l from-emerald-500 to-teal-600 py-4 rounded-2xl font-black disabled:opacity-50 shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/40 transition-all active:scale-[0.98]">
                                 {saving ? 'جاري الحفظ...' : (editingProduct ? 'حفظ التعديلات' : 'إضافة المنتج')}
                             </button>

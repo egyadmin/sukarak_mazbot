@@ -2,17 +2,19 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta, datetime
+from typing import Dict, Any, Optional
 import random
 from app.db.session import SessionLocal
 from app.core.config import settings
 from app.core import security
 from app.models.user import User
+from app.models.cms import Notification
 from app.schemas.user import UserCreate, UserResponse, Token
 
 router = APIRouter()
 
 # In-memory OTP store (for production, use Redis)
-_otp_store = {}  # {email: {"code": "123456", "expires": datetime}}
+_otp_store: Dict[str, Dict[str, Any]] = {}  # {email: {"code": "123456", "expires": datetime}}
 
 def get_db():
     db = SessionLocal()
@@ -134,6 +136,7 @@ def google_auth(data: dict, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == email).first()
     
     if user:
+        is_new_user = False
         # Existing user - update info and login
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account is deactivated")
@@ -158,6 +161,18 @@ def google_auth(data: dict, db: Session = Depends(get_db)):
         db.add(user)
         db.commit()
         db.refresh(user)
+        is_new_user = True
+
+        # Create welcome notification for Google sign-up
+        welcome_notif = Notification(
+            title="🎉 مرحباً بك في سكرك مضبوط!",
+            message=f"أهلاً {user.name}! نحن سعداء بانضمامك عبر Google. استكشف خدماتنا المميزة في إدارة السكري والتحاليل والتمريض. صحتك تهمنا!",
+            type="system",
+            target_audience="user",
+            is_active=True,
+        )
+        db.add(welcome_notif)
+        db.commit()
     
     # Generate token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -166,6 +181,7 @@ def google_auth(data: dict, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
+        "is_new_user": is_new_user,
         "user": {
             "id": user.id,
             "name": user.name,
@@ -211,42 +227,71 @@ def verify_otp(data: dict, db: Session = Depends(get_db)):
     code = data.get("code")
     name = data.get("name", "")
     password = data.get("password", "")
+    phone = data.get("phone", "")
+    age = data.get("age", "")
+    weight = data.get("weight", "")
+    country = data.get("country", "")
+    city = data.get("city", "")
+    gender = data.get("gender", "")
     
     if not email or not code:
         raise HTTPException(status_code=400, detail="Email and OTP code are required")
     
+    # Explicit cast for type checker (values are guaranteed non-None after check above)
+    email_str: str = str(email)
+    code_str: str = str(code)
+    
     # Check OTP
-    stored = _otp_store.get(email)
+    stored = _otp_store.get(email_str)
     if not stored:
         raise HTTPException(status_code=400, detail="رمز التحقق غير صالح أو منتهي الصلاحية")
     
-    if stored["code"] != code:
+    if stored["code"] != code_str:
         raise HTTPException(status_code=400, detail="رمز التحقق غير صحيح")
     
     if datetime.now() > stored["expires"]:
-        del _otp_store[email]
+        _otp_store.pop(email_str, None)
         raise HTTPException(status_code=400, detail="رمز التحقق منتهي الصلاحية")
     
     # OTP is valid - clean up
-    del _otp_store[email]
+    _otp_store.pop(email_str, None)
     
     # Check if user exists
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == email_str).first()
     
     if not user:
         # Create new user
         hashed = security.get_password_hash(password) if password else None
         user = User(
-            email=email,
-            name=name or email.split("@")[0],
+            email=email_str,
+            name=name or email_str.split("@")[0],
             password=hashed,
+            phone=phone or None,
+            age=age or None,
+            weight=weight or None,
+            country=country or None,
+            city=city or None,
+            gender=gender or None,
             login_method="email",
             is_active=True,
         )
         db.add(user)
         db.commit()
         db.refresh(user)
+        is_new_user = True
+
+        # Create welcome notification
+        welcome_notif = Notification(
+            title="🎉 مرحباً بك في سكرك مضبوط!",
+            message=f"أهلاً {user.name}! نحن سعداء بانضمامك. استكشف خدماتنا المميزة في إدارة السكري والتحاليل الطبية والتمريض المنزلي. صحتك تهمنا!",
+            type="system",
+            target_audience="user",
+            is_active=True,
+        )
+        db.add(welcome_notif)
+        db.commit()
     else:
+        is_new_user = False
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Account is deactivated")
     
@@ -257,6 +302,7 @@ def verify_otp(data: dict, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
+        "is_new_user": is_new_user,
         "user": {
             "id": user.id,
             "name": user.name,

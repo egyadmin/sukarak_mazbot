@@ -8,7 +8,7 @@ import {
     Video, PhoneOff, Mic, MicOff, VideoOff, PhoneCall,
     ClipboardList, BarChart3, Shield, UserPlus, Key, Monitor,
     Activity, FileText, PieChart, Calendar, Hash, UserCheck, User,
-    Download, Printer, FileSpreadsheet, Crown, Headset, MessageSquare, RotateCcw, Check, Clock, CheckCircle, Loader2, XCircle
+    Download, Printer, FileSpreadsheet, Crown, Headset, MessageSquare, RotateCcw, Check, Clock, CheckCircle, Loader2, XCircle, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { API_BASE } from '../api/config';
@@ -36,7 +36,7 @@ const AdminDashboard = () => {
     const [showNotifModal, setShowNotifModal] = useState(false);
     const [showUserModal, setShowUserModal] = useState(false);
     const [editingUser, setEditingUser] = useState(null);
-    const [newUser, setNewUser] = useState({ name: '', email: '', phone: '', password: '', role: 'user', country: 'eg', admin_display_name: '', app_display_name: '', seller_department: '', seller_address: '' });
+    const [newUser, setNewUser] = useState({ name: '', email: '', phone: '', password: '', role: 'user', country: 'eg', admin_display_name: '', app_display_name: '', seller_department: '', seller_address: '', lab_name: '', lab_address: '', lab_license_number: '', nursing_center_name: '', nursing_address: '' });
     const [newProduct, setNewProduct] = useState({ title: '', details: '', price: '', stock: '', category: '', sub_category: '', brand: '', sku: '', offer_price: '', offer_start_date: '', offer_end_date: '' });
     const [editingProduct, setEditingProduct] = useState(null);
     const [productCategoryFilter, setProductCategoryFilter] = useState('all');
@@ -62,6 +62,9 @@ const AdminDashboard = () => {
     const [supportTickets, setSupportTickets] = useState([]);
     const [selectedTicket, setSelectedTicket] = useState(null);
     const [adminReply, setAdminReply] = useState('');
+    const [coupons, setCoupons] = useState([]);
+    const [showCouponModal, setShowCouponModal] = useState(false);
+    const [newCoupon, setNewCoupon] = useState({ coupon: '', discount: 10, reusable: false, max_uses: 0, applicable_sections: [], vip_only: false });
     const [chatInput, setChatInput] = useState('');
     const [chatWs, setChatWs] = useState(null);
     const chatEndRef = useRef(null);
@@ -118,6 +121,7 @@ const AdminDashboard = () => {
             fetch(`${API_BASE}/membership/cards`).then(r => r.json()).then(d => setMemberships(Array.isArray(d) ? d : [])).catch(() => { });
             fetch(`${API}/package-requests`).then(r => r.json()).then(d => setPackageRequests(Array.isArray(d) ? d : [])).catch(() => { });
             fetch(`${API_BASE}/support/admin/tickets`).then(r => r.json()).then(d => setSupportTickets(Array.isArray(d) ? d : [])).catch(() => { });
+            fetch(`${API}/coupons`).then(r => r.json()).then(d => setCoupons(Array.isArray(d) ? d : [])).catch(() => { });
             fetch(`${API_BASE}/health/session-requests`).then(r => r.json()).then(d => setSessionRequests(Array.isArray(d) ? d : [])).catch(() => { });
         } catch (e) { console.error(e); }
     };
@@ -166,7 +170,7 @@ const AdminDashboard = () => {
             }
             setPendingLicenses([]);
             setShowUserModal(false);
-            setNewUser({ name: '', email: '', phone: '', password: '', role: 'user', country: 'eg', admin_display_name: '', app_display_name: '', seller_department: '', seller_address: '' });
+            setNewUser({ name: '', email: '', phone: '', password: '', role: 'user', country: 'eg', admin_display_name: '', app_display_name: '', seller_department: '', seller_address: '', lab_name: '', lab_address: '', lab_license_number: '', nursing_center_name: '', nursing_address: '' });
             load();
         }
         else { const d = await res.json(); alert(d.detail || 'خطأ'); }
@@ -424,6 +428,7 @@ const AdminDashboard = () => {
         { id: 'memberships', label: 'العضويات والاشتراكات', icon: Crown },
         { id: 'packages', label: 'إدارة الباقات', icon: ClipboardList },
         { id: 'support', label: 'دعم العملاء', icon: Headset },
+        { id: 'coupons', label: 'أكواد الخصم', icon: Tag },
         { id: 'settings', label: 'الإعدادات', icon: Settings },
     ];
 
@@ -434,7 +439,7 @@ const AdminDashboard = () => {
         { label: 'إجمالي المنتجات', value: stats.total_products, icon: ShoppingBag, gradient: 'from-orange-500 to-red-500' },
     ] : [];
 
-    const roleMap = { admin_master: 'أدمن ماستر', admin: 'مدير', seller: 'تاجر', user: 'مستخدم', nurse: 'ممرض', doctor: 'طبيب' };
+    const roleMap = { admin_master: 'أدمن ماستر', admin: 'مدير', seller: 'تاجر', lab: 'معمل', user: 'مستخدم', nurse: 'ممرض', doctor: 'طبيب' };
     const typeMap = { general: 'إعلان عام', promo: 'عرض ترويجي', health_tip: 'نصيحة صحية', update: 'تحديث' };
 
     const settingsGroups = [
@@ -1270,7 +1275,7 @@ const AdminDashboard = () => {
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="block text-white/30 text-[10px] font-black mb-1.5">الدور</label>
-                                            <select className={selectStyle} value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}><option value="user">مستخدم</option><option value="admin">مدير</option><option value="seller">تاجر</option><option value="doctor">طبيب</option><option value="nurse">ممرض</option></select>
+                                            <select className={selectStyle} value={newUser.role} onChange={e => setNewUser({ ...newUser, role: e.target.value })}><option value="user">مستخدم</option><option value="admin">مدير</option><option value="seller">تاجر</option><option value="lab">معمل تحاليل</option><option value="doctor">طبيب</option><option value="nurse">ممرض</option></select>
                                         </div>
                                         <div>
                                             <label className="block text-white/30 text-[10px] font-black mb-1.5">البلد</label>
@@ -1366,6 +1371,42 @@ const AdminDashboard = () => {
                                             </div>
                                         </div>
                                     )}
+                                    {/* === Lab-specific fields === */}
+                                    {newUser.role === 'lab' && (
+                                        <div className="bg-gradient-to-br from-purple-500/5 to-indigo-500/5 rounded-2xl p-4 border border-purple-400/10 space-y-3">
+                                            <p className="text-purple-400 text-xs font-black flex items-center gap-1.5">🔬 بيانات المعمل</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">اسم المعمل</label>
+                                                    <input className={inputStyle} placeholder="مثال: معمل البرج" value={newUser.lab_name || ''} onChange={e => setNewUser({ ...newUser, lab_name: e.target.value })} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">رقم الترخيص</label>
+                                                    <input className={inputStyle} placeholder="رقم ترخيص المعمل" value={newUser.lab_license_number || ''} onChange={e => setNewUser({ ...newUser, lab_license_number: e.target.value })} />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-white/30 text-[10px] font-black mb-1">عنوان المعمل</label>
+                                                <input className={inputStyle} placeholder="عنوان المعمل الكامل" value={newUser.lab_address || ''} onChange={e => setNewUser({ ...newUser, lab_address: e.target.value })} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* === Nursing-specific fields === */}
+                                    {newUser.role === 'nurse' && (
+                                        <div className="bg-gradient-to-br from-teal-500/5 to-emerald-500/5 rounded-2xl p-4 border border-teal-400/10 space-y-3">
+                                            <p className="text-teal-400 text-xs font-black flex items-center gap-1.5">🏥 بيانات مركز التمريض</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">اسم مركز التمريض</label>
+                                                    <input className={inputStyle} placeholder="مثال: مركز الرعاية المنزلية" value={newUser.nursing_center_name || ''} onChange={e => setNewUser({ ...newUser, nursing_center_name: e.target.value })} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">عنوان المركز</label>
+                                                    <input className={inputStyle} placeholder="عنوان مركز التمريض" value={newUser.nursing_address || ''} onChange={e => setNewUser({ ...newUser, nursing_address: e.target.value })} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
                                     <div className="flex gap-2 pt-2"><button onClick={createUser} className="flex-1 bg-gradient-to-l from-emerald-500 to-teal-600 text-white py-2.5 rounded-xl font-black text-sm">إضافة</button><button onClick={() => setShowUserModal(false)} className="px-4 py-2.5 rounded-xl text-white/30 text-sm font-bold border border-white/10">إلغاء</button></div>
                                 </div></div></div>)}
                             {editingUser && (<div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setEditingUser(null)}><div className={`${glass} rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto`} onClick={e => e.stopPropagation()}>
@@ -1383,6 +1424,7 @@ const AdminDashboard = () => {
                                                 <option value="admin_master">أدمن ماستر</option>
                                                 <option value="admin">مدير</option>
                                                 <option value="seller">تاجر</option>
+                                                <option value="lab">معمل تحاليل</option>
                                                 <option value="user">مستخدم</option>
                                                 <option value="nurse">ممرض</option>
                                                 <option value="doctor">طبيب</option>
@@ -1461,6 +1503,42 @@ const AdminDashboard = () => {
                                                     <button onClick={() => document.getElementById('license-upload').click()} className="w-full bg-white/[0.04] border border-dashed border-white/10 rounded-lg py-2 text-[10px] text-white/30 font-bold hover:bg-white/[0.08] hover:text-white/50 transition">
                                                         📎 رفع ترخيص / مرفق جديد
                                                     </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* === Lab-specific fields (edit mode) === */}
+                                    {(editingUser.role === 'lab') && (
+                                        <div className="bg-gradient-to-br from-purple-500/5 to-indigo-500/5 rounded-2xl p-4 border border-purple-400/10 space-y-3">
+                                            <p className="text-purple-400 text-xs font-black flex items-center gap-1.5">🔬 بيانات المعمل</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">اسم المعمل</label>
+                                                    <input className={inputStyle} placeholder="اسم المعمل" value={editingUser.lab_name || ''} onChange={e => setEditingUser({ ...editingUser, lab_name: e.target.value })} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">رقم الترخيص</label>
+                                                    <input className={inputStyle} placeholder="رقم ترخيص المعمل" value={editingUser.lab_license_number || ''} onChange={e => setEditingUser({ ...editingUser, lab_license_number: e.target.value })} />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <label className="block text-white/30 text-[10px] font-black mb-1">عنوان المعمل</label>
+                                                <input className={inputStyle} placeholder="عنوان المعمل" value={editingUser.lab_address || ''} onChange={e => setEditingUser({ ...editingUser, lab_address: e.target.value })} />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {/* === Nursing-specific fields (edit mode) === */}
+                                    {(editingUser.role === 'nurse') && (
+                                        <div className="bg-gradient-to-br from-teal-500/5 to-emerald-500/5 rounded-2xl p-4 border border-teal-400/10 space-y-3">
+                                            <p className="text-teal-400 text-xs font-black flex items-center gap-1.5">🏥 بيانات مركز التمريض</p>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">اسم مركز التمريض</label>
+                                                    <input className={inputStyle} placeholder="اسم المركز" value={editingUser.nursing_center_name || ''} onChange={e => setEditingUser({ ...editingUser, nursing_center_name: e.target.value })} />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-white/30 text-[10px] font-black mb-1">عنوان المركز</label>
+                                                    <input className={inputStyle} placeholder="عنوان المركز" value={editingUser.nursing_address || ''} onChange={e => setEditingUser({ ...editingUser, nursing_address: e.target.value })} />
                                                 </div>
                                             </div>
                                         </div>
@@ -1797,6 +1875,9 @@ const AdminDashboard = () => {
                                                         )}
                                                     </div>
                                                     <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                                                        <button onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`${n.title}\n${n.details}`)}`, '_blank')} className="p-2 rounded-xl text-green-400 hover:bg-green-500/10 transition-all" title="مشاركة واتساب">
+                                                            <Send className="w-4 h-4" />
+                                                        </button>
                                                         <button onClick={() => toggleNotif(n.id)} className={`p-2 rounded-xl transition-all ${n.active ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-white/20 hover:bg-white/[0.05]'}`} title={n.active ? 'إخفاء' : 'إظهار'}>
                                                             {n.active ? <ToggleRight className="w-4.5 h-4.5" /> : <ToggleLeft className="w-4.5 h-4.5" />}
                                                         </button>
@@ -2075,8 +2156,8 @@ const AdminDashboard = () => {
                                     <div className={`${glass} rounded-2xl p-5`}>
                                         <h3 className="text-sm font-black text-white mb-4">👥 المستخدمين حسب الدور</h3>
                                         <div className="space-y-2">{Object.entries(reports.users?.by_role || {}).map(([k, v]) => {
-                                            const roleLabels = { admin: 'مدير', seller: 'تاجر', user: 'مستخدم', doctor: 'طبيب', moderator: 'مشرف' };
-                                            const roleColors = { admin: 'text-purple-400 bg-purple-500/15', seller: 'text-blue-400 bg-blue-500/15', user: 'text-white/50 bg-white/5', doctor: 'text-emerald-400 bg-emerald-500/15', moderator: 'text-amber-400 bg-amber-500/15' };
+                                            const roleLabels = { admin: 'مدير', seller: 'تاجر', lab: 'معمل', user: 'مستخدم', doctor: 'طبيب', nurse: 'ممرض', moderator: 'مشرف' };
+                                            const roleColors = { admin: 'text-purple-400 bg-purple-500/15', seller: 'text-blue-400 bg-blue-500/15', lab: 'text-violet-400 bg-violet-500/15', user: 'text-white/50 bg-white/5', doctor: 'text-emerald-400 bg-emerald-500/15', nurse: 'text-teal-400 bg-teal-500/15', moderator: 'text-amber-400 bg-amber-500/15' };
                                             return (<div key={k} className="flex items-center justify-between bg-white/[0.03] rounded-lg px-3 py-2.5">
                                                 <span className={`px-2 py-0.5 rounded-lg text-[10px] font-black ${roleColors[k] || 'text-white/50 bg-white/5'}`}>{roleLabels[k] || k}</span>
                                                 <span className="text-white font-black text-sm">{v} <span className="text-white/20 text-[10px]">المزيد</span></span>
@@ -2185,7 +2266,7 @@ const AdminDashboard = () => {
                                             <h3 className="text-lg font-black text-white mb-2">{card.name_ar}</h3>
                                             <div className="flex items-end gap-1 mb-2">
                                                 <span className="text-2xl font-black text-amber-400">{card.prices?.SA} SAR</span>
-                                                <span className="text-[10px] text-white/20 font-bold pb-1">/ شهرياً</span>
+                                                <span className="text-[10px] text-white/20 font-bold pb-1">/ سنوياً</span>
                                             </div>
                                             {/* Show all country prices */}
                                             <div className="flex flex-wrap gap-1 mb-4">
@@ -2757,9 +2838,163 @@ const AdminDashboard = () => {
                         )}
 
 
-                        {/* ???????????????????????????????????????????????????????????? */}
-                        {/* ???????? SETTINGS VIEW ??????? */}
-                        {/* ???????????????????????????????????????????????????????????? */}
+                        {/* ===== COUPONS / DISCOUNT CODES ===== */}
+                        {tab === 'coupons' && (
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-xl font-black text-white">🏷️ إدارة أكواد الخصم</h2>
+                                    <button onClick={() => setShowCouponModal(true)} className="bg-gradient-to-l from-emerald-500 to-teal-600 text-white px-5 py-2.5 rounded-xl font-black text-sm flex items-center gap-2 shadow-lg shadow-emerald-900/30">
+                                        <Plus className="w-4 h-4" /> إضافة كود
+                                    </button>
+                                </div>
+
+                                {/* Preset Quick Add */}
+                                <div className={`${glass} rounded-3xl p-6`}>
+                                    <h3 className="font-black text-sm mb-4">إضافة سريعة - أكواد معدة مسبقاً</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                        {[
+                                            { code: 'NEW50', discount: 50, label: 'خصم 50% للعملاء الجدد', sections: ['store'], icon: '🆕' },
+                                            { code: 'WELCOME10', discount: 10, label: 'خصم 10% ترحيبي', sections: [], icon: '👋' },
+                                            { code: 'HEALTH20', discount: 20, label: 'خصم 20% للتحاليل', sections: ['lab'], icon: '🧪' },
+                                        ].map(preset => (
+                                            <button key={preset.code} onClick={async () => {
+                                                try {
+                                                    const res = await fetch(`${API}/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ coupon: preset.code, discount: preset.discount, reusable: true, applicable_sections: preset.sections }) });
+                                                    if (res.ok) { fetch(`${API}/coupons`).then(r => r.json()).then(d => setCoupons(d)); }
+                                                } catch (e) { console.error(e); }
+                                            }} className="flex items-center gap-3 p-4 bg-white/[0.03] border border-white/[0.06] rounded-2xl hover:border-emerald-500/30 hover:bg-emerald-500/[0.05] transition-all text-right">
+                                                <span className="text-2xl">{preset.icon}</span>
+                                                <div>
+                                                    <p className="text-white font-black text-sm">{preset.code}</p>
+                                                    <p className="text-white/30 text-[10px]">{preset.label}</p>
+                                                </div>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                {/* Coupons List */}
+                                {coupons.length === 0 ? (
+                                    <div className={`${glass} rounded-3xl p-12 text-center`}>
+                                        <Tag className="w-12 h-12 mx-auto opacity-10 mb-4" />
+                                        <p className="text-white/30 font-bold">لا توجد أكواد خصم</p>
+                                        <p className="text-white/15 text-xs mt-2">أضف كود خصم جديد أو استخدم الأكواد المعدة مسبقاً</p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-4">
+                                        {coupons.map(c => (
+                                            <div key={c.id} className={`${glass} rounded-3xl p-5`}>
+                                                <div className="flex justify-between items-start">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-lg ${c.active ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                                                            {c.discount}%
+                                                        </div>
+                                                        <div>
+                                                            <p className="font-black text-lg tracking-widest">{c.coupon}</p>
+                                                            <div className="flex items-center gap-3 mt-1">
+                                                                <span className="text-[10px] text-white/30">استخدم {c.uses_count || 0} مرة</span>
+                                                                {c.max_uses > 0 && <span className="text-[10px] text-white/20">( من {c.max_uses})</span>}
+                                                                {c.reusable ? <span className="text-[10px] text-blue-400">قابل للتكرار</span> : <span className="text-[10px] text-amber-400">استخدام واحد</span>}
+                                                                {c.vip_only && <span className="text-[10px] text-purple-400">VIP فقط</span>}
+                                                            </div>
+                                                            {c.applicable_sections && c.applicable_sections.length > 0 && (
+                                                                <div className="flex gap-1.5 mt-2">
+                                                                    {c.applicable_sections.map(s => (
+                                                                        <span key={s} className="text-[9px] bg-white/[0.06] text-white/40 px-2 py-0.5 rounded-lg font-bold">
+                                                                            {s === 'store' ? '🛍️ المتجر' : s === 'lab' ? '🧪 التحاليل' : s === 'nursing' ? '🏥 التمريض' : s === 'appointments' ? '📅 المواعيد' : s}
+                                                                        </span>
+                                                                    ))}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button onClick={async () => {
+                                                            await fetch(`${API}/coupons/${c.id}/toggle`, { method: 'PUT' });
+                                                            fetch(`${API}/coupons`).then(r => r.json()).then(d => setCoupons(d));
+                                                        }} className={`p-2 rounded-lg transition ${c.active ? 'text-emerald-400 hover:bg-emerald-500/15' : 'text-red-400 hover:bg-red-500/15'}`}>
+                                                            {c.active ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
+                                                        </button>
+                                                        <button onClick={async () => {
+                                                            if (!confirm('حذف هذا الكود؟')) return;
+                                                            await fetch(`${API}/coupons/${c.id}`, { method: 'DELETE' });
+                                                            fetch(`${API}/coupons`).then(r => r.json()).then(d => setCoupons(d));
+                                                        }} className="p-2 rounded-lg text-red-400/50 hover:text-red-400 hover:bg-red-500/15 transition">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Add Coupon Modal */}
+                        {showCouponModal && (
+                            <div className="fixed inset-0 z-[1100] flex items-center justify-center p-4">
+                                <div onClick={() => setShowCouponModal(false)} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                                <div className={`relative ${glass} w-full max-w-md rounded-2xl p-6`}>
+                                    <h2 className="text-lg font-black text-white mb-5">إضافة كود خصم جديد</h2>
+                                    <div className="space-y-4">
+                                        <input placeholder="كود الخصم (مثل: SAVE20)" value={newCoupon.coupon} onChange={e => setNewCoupon({ ...newCoupon, coupon: e.target.value.toUpperCase() })} className={inputStyle} />
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <label className="text-white/30 text-[10px] font-black mb-1 block">نسبة الخصم %</label>
+                                                <input type="number" min="1" max="100" value={newCoupon.discount} onChange={e => setNewCoupon({ ...newCoupon, discount: parseInt(e.target.value) || 0 })} className={inputStyle} />
+                                            </div>
+                                            <div>
+                                                <label className="text-white/30 text-[10px] font-black mb-1 block">الحد الأقصى (0=غير محدود)</label>
+                                                <input type="number" min="0" value={newCoupon.max_uses} onChange={e => setNewCoupon({ ...newCoupon, max_uses: parseInt(e.target.value) || 0 })} className={inputStyle} />
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-white/30 text-[10px] font-black mb-2 block">يطبّق على الأقسام</label>
+                                            <div className="flex flex-wrap gap-2">
+                                                {[{ key: 'store', label: '🛍️ المتجر' }, { key: 'lab', label: '🧪 التحاليل' }, { key: 'nursing', label: '🏥 التمريض' }, { key: 'appointments', label: '📅 المواعيد' }].map(sec => (
+                                                    <button key={sec.key} type="button" onClick={() => {
+                                                        const s = newCoupon.applicable_sections;
+                                                        setNewCoupon({ ...newCoupon, applicable_sections: s.includes(sec.key) ? s.filter(x => x !== sec.key) : [...s, sec.key] });
+                                                    }} className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition ${newCoupon.applicable_sections.includes(sec.key) ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400' : 'bg-white/[0.03] border-white/[0.06] text-white/30'}`}>
+                                                        {sec.label}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                            <p className="text-[9px] text-white/15 mt-1">اترك فارغاً لتطبيق على الكل</p>
+                                        </div>
+                                        <div className="flex items-center gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" checked={newCoupon.reusable} onChange={e => setNewCoupon({ ...newCoupon, reusable: e.target.checked })} className="accent-emerald-500" />
+                                                <span className="text-white/50 text-xs font-bold">قابل للتكرار</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input type="checkbox" checked={newCoupon.vip_only} onChange={e => setNewCoupon({ ...newCoupon, vip_only: e.target.checked })} className="accent-purple-500" />
+                                                <span className="text-white/50 text-xs font-bold">VIP فقط</span>
+                                            </label>
+                                        </div>
+                                        <div className="flex gap-3 pt-2">
+                                            <button onClick={() => setShowCouponModal(false)} className="flex-1 py-3 rounded-xl font-bold text-white/30 hover:bg-white/[0.05] transition">إلغاء</button>
+                                            <button onClick={async () => {
+                                                try {
+                                                    const res = await fetch(`${API}/coupons`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCoupon) });
+                                                    if (res.ok) {
+                                                        fetch(`${API}/coupons`).then(r => r.json()).then(d => setCoupons(d));
+                                                        setShowCouponModal(false);
+                                                        setNewCoupon({ coupon: '', discount: 10, reusable: false, max_uses: 0, applicable_sections: [], vip_only: false });
+                                                    }
+                                                } catch (e) { console.error(e); }
+                                            }} className="flex-1 py-3 bg-gradient-to-l from-emerald-500 to-teal-600 text-white rounded-xl font-black shadow-lg shadow-emerald-900/20">إنشاء الكود</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+
+                        {/* ═══════════════════════════════════════════════════════════════ */}
+                        {/* ════════ SETTINGS VIEW ═══════ */}
+                        {/* ═══════════════════════════════════════════════════════════════ */}
                         {tab === 'settings' && (
                             <div className="space-y-6">
                                 <div className="flex justify-between items-center">

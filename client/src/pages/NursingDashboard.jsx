@@ -29,6 +29,7 @@ const NursingDashboard = () => {
     const [services, setServices] = useState([]);
     const [bookings, setBookings] = useState([]);
     const [nurses, setNurses] = useState([]);
+    const [schedules, setSchedules] = useState([]);
     const [bookingFilter, setBookingFilter] = useState('all');
     const [expandedBooking, setExpandedBooking] = useState(null);
     const [toast, setToast] = useState('');
@@ -43,6 +44,8 @@ const NursingDashboard = () => {
     const [serviceTypeFilter, setServiceTypeFilter] = useState('all');
     const [nurseForm, setNurseForm] = useState({ name: '', email: '', phone: '', password: '' });
     const [scheduleForm, setScheduleForm] = useState({ date: '', time: '', nurse_name: '', notes: '' });
+    const [newSlot, setNewSlot] = useState({ nurse_id: '', date: '', start_time: '09:00', end_time: '10:00', is_available: true });
+    const [scheduleDate, setScheduleDate] = useState(new Date().toISOString().split('T')[0]);
 
     const nurseUser = JSON.parse(localStorage.getItem('admin_user') || '{}');
 
@@ -72,6 +75,11 @@ const NursingDashboard = () => {
             setServices(Array.isArray(sv) ? sv : []);
             setBookings(Array.isArray(bk) ? bk : []);
             setNurses(Array.isArray(nr) ? nr : []);
+            // Fetch schedules
+            try {
+                const schRes = await fetch(`${API}/schedules`);
+                if (schRes.ok) { const schData = await schRes.json(); setSchedules(Array.isArray(schData) ? schData : []); }
+            } catch (e) { console.error('schedules fetch error', e); }
         } catch (e) { console.error(e); }
         setLoading(false);
     }, []);
@@ -166,6 +174,7 @@ const NursingDashboard = () => {
         { id: 'overview', label: 'الإحصائيات', icon: LayoutDashboard },
         { id: 'bookings', label: 'الحجوزات', icon: ClipboardList, badge: bookings.filter(b => b.status === 'pending').length },
         { id: 'services', label: 'الخدمات', icon: Heart },
+        { id: 'schedules', label: 'الجداول', icon: CalendarCheck },
         { id: 'nurses', label: 'الممرضين', icon: UserCheck },
     ];
 
@@ -570,6 +579,125 @@ const NursingDashboard = () => {
                                 ))}
                             </div>
                         )}
+                    </div>
+                )}
+
+                {/* ═══════ SCHEDULES ═══════ */}
+                {tab === 'schedules' && (
+                    <div className="space-y-6">
+                        {/* Add Slot Form */}
+                        <div className={`${glass} rounded-3xl p-6`}>
+                            <h3 className="font-black text-base mb-4 flex items-center gap-2">
+                                <CalendarCheck className="w-5 h-5 text-teal-400" /> إضافة موعد متاح
+                            </h3>
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1">الممرض/ة</label>
+                                    <select className={inputStyle} value={newSlot.nurse_id} onChange={e => setNewSlot({ ...newSlot, nurse_id: e.target.value })}>
+                                        <option value="">اختر</option>
+                                        {nurses.filter(n => n.is_active).map(n => (
+                                            <option key={n.id} value={n.id}>{n.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1">التاريخ</label>
+                                    <input type="date" className={inputStyle} value={newSlot.date} onChange={e => setNewSlot({ ...newSlot, date: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1">من الساعة</label>
+                                    <input type="time" className={inputStyle} value={newSlot.start_time} onChange={e => setNewSlot({ ...newSlot, start_time: e.target.value })} />
+                                </div>
+                                <div>
+                                    <label className="block text-white/30 text-[10px] font-black mb-1">إلى الساعة</label>
+                                    <input type="time" className={inputStyle} value={newSlot.end_time} onChange={e => setNewSlot({ ...newSlot, end_time: e.target.value })} />
+                                </div>
+                                <div className="flex items-end">
+                                    <button
+                                        onClick={async () => {
+                                            if (!newSlot.nurse_id || !newSlot.date || !newSlot.start_time || !newSlot.end_time) {
+                                                showToast('يرجى ملء جميع الحقول');
+                                                return;
+                                            }
+                                            const res = await fetch(`${API}/schedules`, {
+                                                method: 'POST',
+                                                headers: { 'Content-Type': 'application/json' },
+                                                body: JSON.stringify(newSlot),
+                                            });
+                                            if (res.ok) {
+                                                showToast('تم إضافة الموعد');
+                                                setNewSlot({ nurse_id: '', date: '', start_time: '09:00', end_time: '10:00', is_available: true });
+                                                load();
+                                            } else {
+                                                showToast('خطأ في إضافة الموعد');
+                                            }
+                                        }}
+                                        className="w-full py-3 bg-gradient-to-l from-teal-500 to-emerald-600 rounded-xl font-black text-sm flex items-center justify-center gap-2"
+                                    >
+                                        <Plus className="w-4 h-4" /> إضافة
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Schedule View */}
+                        <div className={`${glass} rounded-3xl p-6`}>
+                            <div className="flex items-center justify-between mb-4">
+                                <h3 className="font-black text-base flex items-center gap-2">
+                                    <Calendar className="w-5 h-5 text-teal-400" /> جدول المواعيد
+                                </h3>
+                                <input
+                                    type="date"
+                                    className="bg-white/[0.05] border border-white/[0.1] rounded-xl px-3 py-2 text-white text-sm outline-none"
+                                    value={scheduleDate}
+                                    onChange={e => setScheduleDate(e.target.value)}
+                                />
+                            </div>
+
+                            {schedules.filter(s => !scheduleDate || s.date === scheduleDate).length === 0 ? (
+                                <div className="text-center py-12 text-white/20">
+                                    <CalendarCheck className="w-10 h-10 mx-auto mb-3 opacity-30" />
+                                    <p className="font-bold text-sm">لا توجد مواعيد لهذا اليوم</p>
+                                    <p className="text-xs mt-1">أضف مواعيد جديدة من النموذج أعلاه</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-2">
+                                    {schedules
+                                        .filter(s => !scheduleDate || s.date === scheduleDate)
+                                        .sort((a, b) => a.start_time?.localeCompare(b.start_time))
+                                        .map(s => (
+                                            <div key={s.id} className={`flex items-center justify-between rounded-2xl p-4 ${s.is_available ? 'bg-emerald-500/5 border border-emerald-500/10' : 'bg-red-500/5 border border-red-500/10'}`}>
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${s.is_available ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'}`}>
+                                                        <Clock className="w-5 h-5" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-sm">{s.start_time} - {s.end_time}</p>
+                                                        <p className="text-[10px] text-white/30">
+                                                            {nurses.find(n => n.id === s.nurse_id)?.name || `ممرض #${s.nurse_id}`} • {s.date}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`px-2.5 py-1 rounded-lg text-[9px] font-black ${s.is_available ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
+                                                        {s.is_available ? 'متاح' : 'محجوز'}
+                                                    </span>
+                                                    <button
+                                                        onClick={async () => {
+                                                            await fetch(`${API}/schedules/${s.id}`, { method: 'DELETE' });
+                                                            showToast('تم حذف الموعد');
+                                                            load();
+                                                        }}
+                                                        className="p-2 rounded-xl bg-red-500/5 text-red-400/50 hover:text-red-400 hover:bg-red-500/10 transition"
+                                                    >
+                                                        <Trash2 className="w-4 h-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 )}
             </main>

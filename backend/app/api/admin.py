@@ -9,7 +9,7 @@ from datetime import datetime, timedelta
 from app.db.session import SessionLocal
 
 from app.models.user import User
-from app.models.ecommerce import Product, Order, OrderItem
+from app.models.ecommerce import Product, Order, OrderItem, Coupon
 from app.models.health import SugarReading
 from app.models.cms import Banner, Notification, AppSetting
 from app.models.activity import ActivityLog, Permission, Appointment
@@ -192,7 +192,7 @@ def get_all_users(db: Session = Depends(get_db)):
 
 @router.post("/users")
 def create_user(data: dict, db: Session = Depends(get_db)):
-    """Create a new user from admin panel. Supports seller-specific fields."""
+    """Create a new user from admin panel. Supports seller/lab/nursing-specific fields."""
     import bcrypt
     existing = db.query(User).filter(User.email == data.get("email")).first()
     if existing:
@@ -208,6 +208,13 @@ def create_user(data: dict, db: Session = Depends(get_db)):
         app_display_name=data.get("app_display_name"),
         seller_department=data.get("seller_department"),
         seller_address=data.get("seller_address"),
+        # Lab-specific fields
+        lab_name=data.get("lab_name"),
+        lab_address=data.get("lab_address"),
+        lab_license_number=data.get("lab_license_number"),
+        # Nursing-specific fields
+        nursing_center_name=data.get("nursing_center_name"),
+        nursing_address=data.get("nursing_address"),
     )
     db.add(new_user)
     db.commit()
@@ -230,6 +237,13 @@ def get_user_detail(user_id: int, db: Session = Depends(get_db)):
         "app_display_name": user.app_display_name,
         "seller_department": user.seller_department,
         "seller_address": user.seller_address,
+        # Lab-specific
+        "lab_name": user.lab_name,
+        "lab_address": user.lab_address,
+        "lab_license_number": user.lab_license_number,
+        # Nursing-specific
+        "nursing_center_name": user.nursing_center_name,
+        "nursing_address": user.nursing_address,
     }
     # Include licenses if seller
     if user.role == 'seller':
@@ -246,12 +260,14 @@ def get_user_detail(user_id: int, db: Session = Depends(get_db)):
 
 @router.put("/users/{user_id}")
 def update_user(user_id: int, data: dict, db: Session = Depends(get_db)):
-    """Update user details including seller-specific fields."""
+    """Update user details including seller/lab/nursing-specific fields."""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     for field in ['name', 'email', 'phone', 'role', 'country', 'age', 'weight',
                   'admin_display_name', 'app_display_name', 'seller_department', 'seller_address',
+                  'lab_name', 'lab_address', 'lab_license_number',
+                  'nursing_center_name', 'nursing_address',
                   'wallet_balance', 'loyalty_points']:
         if field in data and data[field] is not None:
             setattr(user, field, data[field])
@@ -279,6 +295,15 @@ def toggle_user_active(user_id: int, db: Session = Depends(get_db)):
     user.is_active = not user.is_active
     log_activity(db, None, "المشرف", "update", "user", user.id, user.name,
                  f"تفعيل/تعطيل المستخدم: {'نشط' if user.is_active else 'معطل'}")
+    # Send welcome notification when user is activated
+    if user.is_active:
+        welcome = Notification(
+            title="مرحباً بك في سكرك مضبوط! 🎉",
+            details=f"أهلاً {user.name}، تم تفعيل حسابك بنجاح. يمكنك الآن الاستمتاع بجميع خدماتنا الصحية والطبية. نتمنى لك تجربة رائعة!",
+            type="general",
+            target="all",
+        )
+        db.add(welcome)
     db.commit()
     return {"status": "success", "is_active": user.is_active}
 
@@ -395,15 +420,19 @@ def add_product(
 # CMS - BANNERS
 # ================================================
 @router.get("/cms/banners")
-def get_banners(db: Session = Depends(get_db)):
-    """Publicly accessible banners"""
-    return db.query(Banner).order_by(Banner.sort_order.asc()).all()
+def get_banners(section: Optional[str] = None, db: Session = Depends(get_db)):
+    """Publicly accessible banners. Filter by section: homepage, store, lab_tests, nursing"""
+    q = db.query(Banner).order_by(Banner.sort_order.asc())
+    if section:
+        q = q.filter(Banner.section == section)
+    return q.all()
 
 @router.post("/cms/banners")
 def add_banner(
     link: str = Form(""),
     title: str = Form(""),
     target_type: str = Form("internal"),
+    section: str = Form("homepage"),
     image: UploadFile = File(...),
     db: Session = Depends(get_db)
 ):
@@ -415,7 +444,7 @@ def add_banner(
         shutil.copyfileobj(image.file, buffer)
     db_banner = Banner(
         image_url=f"/media/cms/{file_name}", link=link, title=title,
-        target_type=target_type, active=True
+        target_type=target_type, section=section, active=True
     )
     db.add(db_banner)
     db.commit()
@@ -597,7 +626,7 @@ def get_reports_summary(db: Session = Depends(get_db)):
         "orders": {
             "total": total_orders,
             "total_revenue": total_revenue,
-            "avg_order_value": round(avg_order_value, 2),
+            "avg_order_value": int(float(avg_order_value) * 100) / 100,
             "by_status": {s: c for s, c in orders_by_status},
             "by_type": {t: c for t, c in orders_by_type},
             "by_payment": {p: c for p, c in orders_by_payment}
@@ -625,7 +654,7 @@ def get_orders_timeline(db: Session = Depends(get_db)):
         if o.created_at:
             key = o.created_at.strftime("%Y-%m")
             if key not in timeline:
-                timeline[key] = {"count": 0, "revenue": 0}
+                timeline[key] = {"count": 0, "revenue": 0.0}
             timeline[key]["count"] += 1
             timeline[key]["revenue"] += float(o.total_amount)
     return [{"month": k, **v} for k, v in timeline.items()]
@@ -818,7 +847,7 @@ def delete_seller_license(user_id: int, license_id: int, db: Session = Depends(g
 # MEMBERSHIP SUBSCRIBERS
 # ════════════════════════════════════════════════════════════
 @router.get("/memberships/subscribers")
-def get_membership_subscribers(card_type: str = None, db: Session = Depends(get_db)):
+def get_membership_subscribers(card_type: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all membership subscribers, optionally filtered by card_type."""
     query = db.query(UserMembership, User).join(User, User.id == UserMembership.user_id)
     if card_type:
@@ -857,3 +886,75 @@ def get_membership_stats(db: Session = Depends(get_db)):
         "by_type": {t: c for t, c in by_type},
         "total_revenue": total_revenue,
     }
+
+
+# ================================================
+# COUPONS / DISCOUNT CODES
+# ================================================
+
+@router.get("/coupons")
+def get_all_coupons(db: Session = Depends(get_db)):
+    """Get all coupons for admin management."""
+    coupons = db.query(Coupon).order_by(desc(Coupon.created_at)).all()
+    import json as _json
+    return [{
+        "id": c.id,
+        "coupon": c.coupon,
+        "discount": float(c.discount) if c.discount else 0,
+        "reusable": c.reusable,
+        "max_uses": c.max_uses,
+        "active": c.active,
+        "applicable_sections": _json.loads(c.applicable_sections or "[]"),
+        "vip_only": c.vip_only,
+        "users": _json.loads(c.users or "[]"),
+        "uses_count": len(_json.loads(c.users or "[]")),
+        "created_at": c.created_at.isoformat() if c.created_at else None,
+    } for c in coupons]
+
+
+@router.post("/coupons")
+def create_coupon(data: dict, db: Session = Depends(get_db)):
+    """Create a new coupon."""
+    import json as _json
+    code = data.get("coupon", "").strip().upper()
+    if not code:
+        raise HTTPException(400, "\u0643\u0648\u062f \u0627\u0644\u062e\u0635\u0645 \u0645\u0637\u0644\u0648\u0628")
+    existing = db.query(Coupon).filter(Coupon.coupon == code).first()
+    if existing:
+        raise HTTPException(400, "\u0643\u0648\u062f \u0627\u0644\u062e\u0635\u0645 \u0645\u0648\u062c\u0648\u062f \u0628\u0627\u0644\u0641\u0639\u0644")
+
+    coupon = Coupon(
+        coupon=code,
+        discount=data.get("discount", 10),
+        reusable=1 if data.get("reusable", False) else 0,
+        max_uses=data.get("max_uses", 0),
+        active=data.get("active", True),
+        applicable_sections=_json.dumps(data.get("applicable_sections", [])),
+        vip_only=data.get("vip_only", False),
+    )
+    db.add(coupon)
+    db.commit()
+    db.refresh(coupon)
+    return {"status": "success", "message": "\u062a\u0645 \u0625\u0646\u0634\u0627\u0621 \u0643\u0648\u062f \u0627\u0644\u062e\u0635\u0645", "id": coupon.id}
+
+
+@router.put("/coupons/{coupon_id}/toggle")
+def toggle_coupon(coupon_id: int, db: Session = Depends(get_db)):
+    """Toggle coupon active status."""
+    coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    if not coupon:
+        raise HTTPException(404, "\u0643\u0648\u062f \u0627\u0644\u062e\u0635\u0645 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f")
+    coupon.active = not coupon.active
+    db.commit()
+    return {"status": "success", "active": coupon.active}
+
+
+@router.delete("/coupons/{coupon_id}")
+def delete_coupon(coupon_id: int, db: Session = Depends(get_db)):
+    """Delete a coupon."""
+    coupon = db.query(Coupon).filter(Coupon.id == coupon_id).first()
+    if not coupon:
+        raise HTTPException(404, "\u0643\u0648\u062f \u0627\u0644\u062e\u0635\u0645 \u063a\u064a\u0631 \u0645\u0648\u062c\u0648\u062f")
+    db.delete(coupon)
+    db.commit()
+    return {"status": "success", "message": "\u062a\u0645 \u062d\u0630\u0641 \u0643\u0648\u062f \u0627\u0644\u062e\u0635\u0645"}

@@ -26,6 +26,19 @@ const paymentLabels = {
     wallet: { label: 'المحفظة', icon: '👛' },
 };
 
+const getTimeline = (status) => {
+    const steps = [
+        { key: 'confirmed', label: 'تأكيد', icon: '📋', done: false },
+        { key: 'processing', label: 'تجهيز', icon: '📦', done: false },
+        { key: 'shipped', label: 'شحن', icon: '🚚', done: false },
+        { key: 'delivered', label: 'توصيل', icon: '✅', done: false },
+    ];
+    const order = ['confirmed', 'processing', 'shipped', 'delivered'];
+    const idx = order.indexOf(status);
+    steps.forEach((s, i) => { s.done = i <= idx; });
+    return steps;
+};
+
 const MyOrdersView = () => {
     const navigate = useNavigate();
     const [orders, setOrders] = useState([]);
@@ -242,13 +255,111 @@ const MyOrdersView = () => {
                                         </div>
                                         <AnimatePresence>
                                             {isExpanded && (
-                                                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="px-4 pb-4 border-t border-gray-50 pt-3">
-                                                    <button onClick={() => setShowInvoice(order)} className="w-full bg-blue-50 text-blue-600 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 mb-2">
-                                                        <FileText className="w-4 h-4" /> عرض الفاتورة
-                                                    </button>
-                                                    {['confirmed', 'processing'].includes(order.status) && (
-                                                        <button onClick={() => cancelOrder(order.id)} className="w-full bg-red-50 text-red-600 py-2.5 rounded-xl font-bold text-xs">إلغاء الطلب</button>
+                                                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="px-4 pb-4 border-t border-gray-50 pt-3 space-y-3">
+                                                    {/* Order Timeline */}
+                                                    {!['cancelled', 'refunded'].includes(order.status) && (
+                                                        <div className="flex items-center justify-between px-2">
+                                                            {getTimeline(order.status).map((step, i) => (
+                                                                <div key={step.key} className="flex flex-col items-center flex-1">
+                                                                    <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs mb-1 ${step.done ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-300'}`}>
+                                                                        {step.done ? '✓' : step.icon}
+                                                                    </div>
+                                                                    <span className={`text-[8px] font-bold ${step.done ? 'text-emerald-600' : 'text-gray-300'}`}>{step.label}</span>
+                                                                    {i < 3 && <div className={`absolute w-8 h-0.5 ${step.done ? 'bg-emerald-400' : 'bg-gray-100'}`} style={{ marginTop: -18, marginRight: -32 }} />}
+                                                                </div>
+                                                            ))}
+                                                        </div>
                                                     )}
+
+                                                    {/* Product Items */}
+                                                    {order.items?.length > 0 && (
+                                                        <div className="bg-gray-50 rounded-xl p-3 space-y-2">
+                                                            <p className="text-[10px] font-bold text-gray-400 mb-1">📦 تفاصيل المنتجات</p>
+                                                            {order.items.map((item, ii) => (
+                                                                <div key={ii} className="flex items-center justify-between py-1.5 border-b border-gray-100 last:border-0">
+                                                                    <div className="flex-1">
+                                                                        <p className="text-xs font-bold text-gray-700">{item.product_name}</p>
+                                                                        <p className="text-[10px] text-gray-400">الكمية: {item.quantity} × {formatPrice(item.unit_price)}</p>
+                                                                    </div>
+                                                                    <p className="text-xs font-black text-primary-emerald">{formatPrice(item.total_price || (item.unit_price * item.quantity))}</p>
+                                                                </div>
+                                                            ))}
+                                                            {/* Order Summary */}
+                                                            <div className="pt-2 border-t border-gray-200 space-y-1">
+                                                                {order.discount_amount > 0 && (
+                                                                    <div className="flex justify-between text-[10px]">
+                                                                        <span className="text-gray-400">الخصم</span>
+                                                                        <span className="text-red-500 font-bold">-{formatPrice(order.discount_amount)}</span>
+                                                                    </div>
+                                                                )}
+                                                                <div className="flex justify-between text-xs">
+                                                                    <span className="text-gray-500 font-bold">الإجمالي</span>
+                                                                    <span className="font-black text-primary-emerald">{formatPrice(order.total_amount)}</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Seller Info */}
+                                                    {order.items?.[0]?.seller_name && (
+                                                        <div className="bg-amber-50 rounded-xl p-3 flex items-center gap-2">
+                                                            <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center text-sm">🏪</div>
+                                                            <div>
+                                                                <p className="text-[10px] text-amber-500">التاجر</p>
+                                                                <p className="text-xs font-bold text-amber-800">{order.items[0].seller_name}</p>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Action Buttons */}
+                                                    <div className="space-y-2">
+                                                        <button onClick={() => setShowInvoice(order)} className="w-full bg-blue-50 text-blue-600 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                                            <FileText className="w-4 h-4" /> عرض الفاتورة
+                                                        </button>
+
+                                                        {/* Reorder Button */}
+                                                        <button onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            const cartItems = (order.items || []).map(item => ({
+                                                                id: item.product_id,
+                                                                title: item.product_name,
+                                                                price: item.unit_price,
+                                                                qty: item.quantity,
+                                                            }));
+                                                            localStorage.setItem('sukarak_reorder', JSON.stringify(cartItems));
+                                                            navigate('/market', { state: { reorder: true } });
+                                                        }} className="w-full bg-emerald-50 text-emerald-600 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                                            <RefreshCw className="w-4 h-4" /> إعادة الطلب
+                                                        </button>
+
+                                                        {/* Cancel Button */}
+                                                        {['confirmed', 'processing'].includes(order.status) && (
+                                                            <button onClick={() => cancelOrder(order.id)} className="w-full bg-red-50 text-red-600 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                                                <XCircle className="w-4 h-4" /> إلغاء الطلب
+                                                            </button>
+                                                        )}
+
+                                                        {/* Return Request - within 7 days of delivery */}
+                                                        {order.status === 'delivered' && order.delivered_at && (
+                                                            (() => {
+                                                                const deliveredDate = new Date(order.delivered_at || order.updated_at || order.created_at);
+                                                                const now = new Date();
+                                                                const daysSinceDelivery = Math.floor((now - deliveredDate) / (1000 * 60 * 60 * 24));
+                                                                const canReturn = daysSinceDelivery <= 7;
+                                                                return canReturn ? (
+                                                                    <button onClick={() => requestRefund(order.id)} disabled={refundingId === order.id}
+                                                                        className="w-full bg-orange-50 text-orange-600 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50">
+                                                                        <RotateCcw className="w-4 h-4" />
+                                                                        {refundingId === order.id ? 'جاري المعالجة...' : `طلب إرجاع (متبقي ${7 - daysSinceDelivery} أيام)`}
+                                                                    </button>
+                                                                ) : (
+                                                                    <div className="w-full bg-gray-50 text-gray-400 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-2">
+                                                                        <AlertTriangle className="w-4 h-4" /> انتهت مهلة الإرجاع (7 أيام)
+                                                                    </div>
+                                                                );
+                                                            })()
+                                                        )}
+                                                    </div>
                                                 </motion.div>
                                             )}
                                         </AnimatePresence>

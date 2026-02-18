@@ -229,6 +229,33 @@ const MoreView = () => {
                 </div>
 
                 {/* ═══════════════════════════════════════ */}
+                {/* Social Media Section */}
+                {/* ═══════════════════════════════════════ */}
+                <div>
+                    <h2 className="text-[15px] font-black text-gray-800 mb-3 px-1">
+                        {isRTL ? '📱 تابعنا على' : '📱 Follow Us'}
+                    </h2>
+                    <div className="flex items-center gap-2 justify-center">
+                        {[
+                            { name: isRTL ? 'فيسبوك' : 'Facebook', icon: '📘', url: 'https://www.facebook.com/share/1AgTgtA3HT/', bg: 'from-blue-500 to-blue-700' },
+                            { name: isRTL ? 'تيك توك' : 'TikTok', icon: '🎵', url: 'https://www.tiktok.com/@diabetes.association?_t=ZS-8wKcU9b9teJ&_r=1', bg: 'from-gray-800 to-black' },
+                            { name: isRTL ? 'يوتيوب' : 'YouTube', icon: '📺', url: 'https://youtube.com/@diabetes.association?si=zkByS6yV9g5UST6L', bg: 'from-red-500 to-red-700' },
+                            { name: isRTL ? 'إنستاجرام' : 'Instagram', icon: '📷', url: 'https://www.instagram.com/diabetes.association?igsh=MXRuc3prYzF6YXVhYw==', bg: 'from-pink-500 to-purple-600' },
+                            { name: 'X', icon: '𝕏', url: 'https://x.com/Drvitamin4', bg: 'from-gray-900 to-black' },
+                            { name: isRTL ? 'سناب' : 'Snap', icon: '👻', url: 'https://www.snapchat.com/add/diabetes.care?share_id=djbd5DKCDEs&locale=en-US', bg: 'from-yellow-300 to-yellow-500' },
+                        ].map((s, i) => (
+                            <motion.a key={i} href={s.url} target="_blank" rel="noopener noreferrer"
+                                initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.06 }}
+                                className={`bg-gradient-to-br ${s.bg} p-2.5 rounded-xl text-white text-center shadow-md hover:shadow-lg hover:scale-[1.05] active:scale-95 transition-all flex-1`}
+                            >
+                                <span className="text-lg block mb-0.5">{s.icon}</span>
+                                <p className={`text-[7px] font-black leading-tight ${s.bg.includes('yellow') ? 'text-gray-800' : ''}`}>{s.name}</p>
+                            </motion.a>
+                        ))}
+                    </div>
+                </div>
+
+                {/* ═══════════════════════════════════════ */}
                 {/* App Version */}
                 {/* ═══════════════════════════════════════ */}
                 <div className="text-center pt-4">
@@ -305,24 +332,24 @@ const MoreView = () => {
                         </p>
                     </div>
 
-                    <a href="mailto:support@sukarak-mazboot.com" className="flex items-center gap-4 px-5 py-4 bg-blue-50 rounded-xl border border-blue-100 hover:bg-blue-100 transition group">
+                    <a href="mailto:sukarakmazbout@gmail.com" className="flex items-center gap-4 px-5 py-4 bg-blue-50 rounded-xl border border-blue-100 hover:bg-blue-100 transition group">
                         <div className="w-11 h-11 rounded-xl bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition">
                             <Mail className="w-5 h-5 text-blue-500" />
                         </div>
                         <div className="flex-1">
                             <p className="font-bold text-gray-700 text-sm">{isRTL ? 'البريد الإلكتروني' : 'Email'}</p>
-                            <p className="text-xs text-gray-400">support@sukarak-mazboot.com</p>
+                            <p className="text-xs text-gray-400">sukarakmazbout@gmail.com</p>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-300" />
                     </a>
 
-                    <a href="https://wa.me/201234567890" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 px-5 py-4 bg-green-50 rounded-xl border border-green-100 hover:bg-green-100 transition group">
+                    <a href="https://wa.me/201027696380" target="_blank" rel="noopener noreferrer" className="flex items-center gap-4 px-5 py-4 bg-green-50 rounded-xl border border-green-100 hover:bg-green-100 transition group">
                         <div className="w-11 h-11 rounded-xl bg-green-100 flex items-center justify-center group-hover:bg-green-200 transition">
                             <MessageSquare className="w-5 h-5 text-green-500" />
                         </div>
                         <div className="flex-1">
                             <p className="font-bold text-gray-700 text-sm">{isRTL ? 'واتساب' : 'WhatsApp'}</p>
-                            <p className="text-xs text-gray-400" dir="ltr">+20 123 456 7890</p>
+                            <p className="text-xs text-gray-400" dir="ltr">+20 102 769 6380</p>
                         </div>
                         <ExternalLink className="w-4 h-4 text-gray-300" />
                     </a>

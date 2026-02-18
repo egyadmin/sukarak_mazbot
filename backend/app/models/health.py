@@ -7,7 +7,8 @@ class SugarReading(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("sukarak_users.id"), nullable=False)
     reading = Column(Float, nullable=False)
-    test_type = Column(String(100))  # fasting, random, etc.
+    test_type = Column(String(100))  # fasting, after_meal, random, before_meal, cumulative
+    unit = Column(String(20), default='mg/dl')  # mg/dl or percent (for HbA1c)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class InsulinRecord(Base):
@@ -40,10 +41,12 @@ class DrugRecord(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("sukarak_users.id"), nullable=False)
     name = Column(String(255), nullable=False)
-    form = Column(String(100))
+    form = Column(String(100))  # medication type/form
     frequency = Column(String(100))
-    serving = Column(String(100))
+    serving = Column(String(100))  # dosage amount
+    dosage_unit = Column(String(50))  # dosage unit (mg, ml, units, etc)
     concentration = Column(String(100))
+    concentration_unit = Column(String(50))  # concentration unit (mg/ml, %, etc)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 class MedicineReminder(Base):

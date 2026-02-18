@@ -42,7 +42,7 @@ const Navbar = ({ toggleLanguage }) => {
     };
 
     return (
-        <nav className="fixed top-0 w-full z-50 px-4 py-3" style={{ background: 'rgba(245, 255, 252, 0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(0,0,0,0.04)' }}>
+        <nav className="fixed top-0 w-full z-50 px-4 py-3" style={{ background: 'rgba(245, 255, 252, 0.85)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', borderBottom: '1px solid rgba(0,0,0,0.04)', paddingTop: 'max(env(safe-area-inset-top, 0px), 12px)' }}>
             <div className="max-w-lg mx-auto flex items-center justify-between">
                 {/* Logo + Title */}
                 <div className="flex items-center gap-2.5">

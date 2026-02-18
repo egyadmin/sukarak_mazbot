@@ -24,6 +24,8 @@ const AppointmentsView = () => {
     });
     const [submitting, setSubmitting] = useState(false);
     const [showSuccess, setShowSuccess] = useState(false);
+    const [activeTab, setActiveTab] = useState('upcoming');
+    const [expandedPastId, setExpandedPastId] = useState(null);
 
     const [sessionRequested, setSessionRequested] = useState(null);
     const [waitingApproval, setWaitingApproval] = useState(false);
@@ -114,8 +116,7 @@ const AppointmentsView = () => {
             const data = await res.json();
             if (data.status === 'success') {
                 setShowBooking(false);
-                setShowSuccess(true);
-                setTimeout(() => setShowSuccess(false), 2500);
+                setShowSuccess(bookingForm);
                 fetchAppointments();
                 setBookingForm({ doctor_id: 1, doctor_name: 'الفريق الطبي', appointment_type: 'video', scheduled_at: '', notes: '', duration_minutes: 30 });
             }
@@ -527,12 +528,39 @@ const AppointmentsView = () => {
                 </div>
             ) : (
                 <>
-                    {/* Success Toast */}
+                    {/* Success Modal with WhatsApp */}
                     <AnimatePresence>
                         {showSuccess && (
-                            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}
-                                className="bg-emerald-500 text-white p-4 rounded-2xl text-center font-black text-sm shadow-lg">
-                                {lang === 'ar' ? 'تم حجز الموعد بنجاح!' : 'Appointment booked!'}
+                            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-[1100] bg-black/50 backdrop-blur-sm flex items-center justify-center p-4"
+                                onClick={() => setShowSuccess(false)}>
+                                <motion.div initial={{ scale: 0.8, y: 30 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 30 }}
+                                    className="bg-white rounded-3xl p-8 mx-4 max-w-sm w-full text-center space-y-4 shadow-2xl"
+                                    onClick={e => e.stopPropagation()}>
+                                    <div className="w-16 h-16 bg-emerald-50 rounded-full flex items-center justify-center mx-auto">
+                                        <Check className="w-8 h-8 text-emerald-500" />
+                                    </div>
+                                    <h3 className="text-lg font-black text-gray-800">
+                                        {lang === 'ar' ? 'تم حجز الموعد بنجاح! ✅' : 'Appointment Booked! ✅'}
+                                    </h3>
+                                    <p className="text-sm text-gray-400">
+                                        {lang === 'ar' ? 'يمكنك تأكيد أو تعديل الموعد عبر واتساب' : 'You can confirm or adjust via WhatsApp'}
+                                    </p>
+                                    <a href={`https://wa.me/201027696380?text=${encodeURIComponent(
+                                        lang === 'ar'
+                                            ? `مرحباً، قمت بحجز موعد استشارة (${showSuccess.appointment_type === 'video' ? 'فيديو' : showSuccess.appointment_type === 'audio' ? 'صوتي' : 'محادثة'}) بتاريخ ${showSuccess.scheduled_at}. أود تأكيد الموعد.`
+                                            : `Hello, I booked a consultation appointment (${showSuccess.appointment_type}) on ${showSuccess.scheduled_at}. I'd like to confirm.`
+                                    )}`}
+                                        target="_blank" rel="noopener noreferrer"
+                                        className="flex items-center justify-center gap-2 w-full bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-2xl font-black text-sm shadow-lg transition active:scale-[0.98]">
+                                        <MessageSquare className="w-5 h-5" />
+                                        {lang === 'ar' ? 'تأكيد عبر واتساب' : 'Confirm via WhatsApp'}
+                                    </a>
+                                    <button onClick={() => setShowSuccess(false)}
+                                        className="text-xs text-gray-300 font-bold hover:text-gray-500 transition">
+                                        {lang === 'ar' ? 'تخطي' : 'Skip'}
+                                    </button>
+                                </motion.div>
                             </motion.div>
                         )}
                     </AnimatePresence>
@@ -544,84 +572,155 @@ const AppointmentsView = () => {
                         </button>
                     </div>
 
-                    <div className="space-y-4">
-                        {loading ? <Loader2 className="w-8 h-8 animate-spin mx-auto mt-10" /> : upcoming.length === 0 ? (
-                            <div className="text-center py-10 bg-white rounded-3xl border border-dashed border-gray-200">
-                                <CalendarIcon className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-                                <p className="text-gray-400 font-bold">{lang === 'ar' ? 'لا توجد مواعيد قادمة' : 'No upcoming appointments'}</p>
-                            </div>
-                        ) : (
-                            upcoming.map(app => {
-                                const status = statusColors[app.status] || statusColors.scheduled;
-                                const TypeIcon = typeIcons[app.appointment_type] || Video;
-                                const isRequesting = sessionRequested === app.id;
-                                return (
-                                    <motion.div key={app.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 space-y-4">
-                                        <div className="flex justify-between items-center">
-                                            <div className="flex items-center gap-3">
-                                                <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center"><User className="w-5 h-5 text-emerald-600" /></div>
-                                                <div>
-                                                    <h4 className="font-black text-primary-dark">{lang === 'ar' ? 'الفريق الطبي' : 'Medical Team'}</h4>
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <TypeIcon className="w-3 h-3 text-gray-400" />
-                                                        <span className="text-[10px] text-gray-400 font-bold">{typeLabels[app.appointment_type] || typeLabels.video}</span>
-                                                        <span className="text-[10px] text-gray-300 mx-1">-</span>
-                                                        <Clock className="w-3 h-3 text-gray-400" />
-                                                        <span className="text-[10px] text-gray-400 font-bold">{app.duration_minutes || 30} {lang === 'ar' ? 'دقيقة' : 'min'}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <span className={`px-3 py-1 rounded-full text-[10px] font-black ${status.bg} ${status.text}`}>{status.label}</span>
-                                        </div>
-                                        <div className="flex gap-3">
-                                            <div className="flex-1 bg-gray-50 p-3 rounded-xl flex items-center gap-2"><CalendarIcon className="w-4 h-4 text-gray-400" /><span className="text-xs font-bold text-gray-600">{new Date(app.scheduled_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}</span></div>
-                                            <div className="flex-1 bg-gray-50 p-3 rounded-xl flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /><span className="text-xs font-bold text-gray-600">{new Date(app.scheduled_at).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</span></div>
-                                        </div>
-                                        {app.notes && (
-                                            <div className="bg-amber-50 p-3 rounded-xl flex items-start gap-2">
-                                                <FileText className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
-                                                <p className="text-xs text-gray-600">{app.notes}</p>
-                                            </div>
-                                        )}
-                                        <div className="flex gap-2">
-                                            <button onClick={() => handleCancel(app.id)} className="flex-1 py-3 text-red-500 font-bold text-xs" data-testid={`button-cancel-${app.id}`}>
-                                                {lang === 'ar' ? 'إلغاء' : 'Cancel'}
-                                            </button>
-                                            {(app.status === 'scheduled' || app.status === 'pending') && (
-                                                <button onClick={() => handleRequestSession(app)}
-                                                    disabled={isRequesting}
-                                                    data-testid={`button-start-session-${app.id}`}
-                                                    className="flex-[2] py-3 bg-primary-dark text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 transition">
-                                                    {isRequesting ? <><Loader2 className="w-4 h-4 animate-spin" /> {lang === 'ar' ? 'جاري الإرسال...' : 'Sending...'}</>
-                                                        : <>{lang === 'ar' ? 'بدء الجلسة' : 'Start Session'}</>}
-                                                </button>
-                                            )}
-                                        </div>
-                                    </motion.div>
-                                );
-                            })
-                        )}
+                    {/* Tab Switcher */}
+                    <div className="bg-gray-100 rounded-2xl p-1.5 flex gap-1">
+                        <button
+                            onClick={() => setActiveTab('upcoming')}
+                            className={`flex-1 py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'upcoming' ? 'bg-white text-primary-dark shadow-sm' : 'text-gray-400'}`}
+                            data-testid="tab-upcoming">
+                            <CalendarIcon className="w-4 h-4" />
+                            {lang === 'ar' ? 'القادمة' : 'Upcoming'}
+                            {upcoming.length > 0 && <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'upcoming' ? 'bg-primary-emerald text-white' : 'bg-gray-200 text-gray-500'}`}>{upcoming.length}</span>}
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('past')}
+                            className={`flex-1 py-3 rounded-xl font-black text-sm transition-all flex items-center justify-center gap-2 ${activeTab === 'past' ? 'bg-white text-primary-dark shadow-sm' : 'text-gray-400'}`}
+                            data-testid="tab-past">
+                            <Clock className="w-4 h-4" />
+                            {lang === 'ar' ? 'السابقة' : 'Past'}
+                            {past.length > 0 && <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${activeTab === 'past' ? 'bg-gray-500 text-white' : 'bg-gray-200 text-gray-500'}`}>{past.length}</span>}
+                        </button>
                     </div>
 
-                    {/* Past Appointments */}
-                    {past.length > 0 && (
-                        <div className="space-y-3 mt-6">
-                            <h3 className="text-sm font-black text-gray-300">{lang === 'ar' ? 'المواعيد السابقة' : 'Past Appointments'}</h3>
-                            {past.map(app => {
-                                const status = statusColors[app.status] || statusColors.completed;
-                                return (
-                                    <div key={app.id} className="bg-gray-50 p-4 rounded-2xl flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <User className="w-5 h-5 text-gray-300" />
-                                            <div>
-                                                <p className="font-bold text-sm text-gray-500">{lang === 'ar' ? 'الفريق الطبي' : 'Medical Team'}</p>
-                                                <p className="text-[10px] text-gray-300">{new Date(app.scheduled_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}</p>
+                    {/* Upcoming Appointments */}
+                    {activeTab === 'upcoming' && (
+                        <div className="space-y-4">
+                            {loading ? <Loader2 className="w-8 h-8 animate-spin mx-auto mt-10" /> : upcoming.length === 0 ? (
+                                <div className="text-center py-10 bg-white rounded-3xl border border-dashed border-gray-200">
+                                    <CalendarIcon className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                                    <p className="text-gray-400 font-bold">{lang === 'ar' ? 'لا توجد مواعيد قادمة' : 'No upcoming appointments'}</p>
+                                </div>
+                            ) : (
+                                upcoming.map(app => {
+                                    const status = statusColors[app.status] || statusColors.scheduled;
+                                    const TypeIcon = typeIcons[app.appointment_type] || Video;
+                                    const isRequesting = sessionRequested === app.id;
+                                    return (
+                                        <motion.div key={app.id} className="bg-white p-5 rounded-3xl shadow-sm border border-gray-50 space-y-4">
+                                            <div className="flex justify-between items-center">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center"><User className="w-5 h-5 text-emerald-600" /></div>
+                                                    <div>
+                                                        <h4 className="font-black text-primary-dark">{lang === 'ar' ? 'الفريق الطبي' : 'Medical Team'}</h4>
+                                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                                            <TypeIcon className="w-3 h-3 text-gray-400" />
+                                                            <span className="text-[10px] text-gray-400 font-bold">{typeLabels[app.appointment_type] || typeLabels.video}</span>
+                                                            <span className="text-[10px] text-gray-300 mx-1">-</span>
+                                                            <Clock className="w-3 h-3 text-gray-400" />
+                                                            <span className="text-[10px] text-gray-400 font-bold">{app.duration_minutes || 30} {lang === 'ar' ? 'دقيقة' : 'min'}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black ${status.bg} ${status.text}`}>{status.label}</span>
                                             </div>
-                                        </div>
-                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black ${status.bg} ${status.text}`}>{status.label}</span>
-                                    </div>
-                                );
-                            })}
+                                            <div className="flex gap-3">
+                                                <div className="flex-1 bg-gray-50 p-3 rounded-xl flex items-center gap-2"><CalendarIcon className="w-4 h-4 text-gray-400" /><span className="text-xs font-bold text-gray-600">{new Date(app.scheduled_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}</span></div>
+                                                <div className="flex-1 bg-gray-50 p-3 rounded-xl flex items-center gap-2"><Clock className="w-4 h-4 text-gray-400" /><span className="text-xs font-bold text-gray-600">{new Date(app.scheduled_at).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}</span></div>
+                                            </div>
+                                            {app.notes && (
+                                                <div className="bg-amber-50 p-3 rounded-xl flex items-start gap-2">
+                                                    <FileText className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                                    <p className="text-xs text-gray-600">{app.notes}</p>
+                                                </div>
+                                            )}
+                                            <div className="flex gap-2">
+                                                <button onClick={() => handleCancel(app.id)} className="flex-1 py-3 text-red-500 font-bold text-xs" data-testid={`button-cancel-${app.id}`}>
+                                                    {lang === 'ar' ? 'إلغاء' : 'Cancel'}
+                                                </button>
+                                                {(app.status === 'scheduled' || app.status === 'pending') && (
+                                                    <button onClick={() => handleRequestSession(app)}
+                                                        disabled={isRequesting}
+                                                        data-testid={`button-start-session-${app.id}`}
+                                                        className="flex-[2] py-3 bg-primary-dark text-white rounded-xl font-bold text-xs flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 transition">
+                                                        {isRequesting ? <><Loader2 className="w-4 h-4 animate-spin" /> {lang === 'ar' ? 'جاري الإرسال...' : 'Sending...'}</>
+                                                            : <>{lang === 'ar' ? 'بدء الجلسة' : 'Start Session'}</>}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    );
+                                })
+                            )}
+                        </div>
+                    )}
+
+                    {/* Past Appointments */}
+                    {activeTab === 'past' && (
+                        <div className="space-y-3">
+                            {past.length === 0 ? (
+                                <div className="text-center py-10 bg-white rounded-3xl border border-dashed border-gray-200">
+                                    <Clock className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+                                    <p className="text-gray-400 font-bold">{lang === 'ar' ? 'لا توجد مواعيد سابقة' : 'No past appointments'}</p>
+                                </div>
+                            ) : (
+                                past.map(app => {
+                                    const status = statusColors[app.status] || statusColors.completed;
+                                    const TypeIcon = typeIcons[app.appointment_type] || Video;
+                                    const isExpanded = expandedPastId === app.id;
+                                    return (
+                                        <motion.div key={app.id} layout
+                                            onClick={() => setExpandedPastId(isExpanded ? null : app.id)}
+                                            className="bg-white p-4 rounded-2xl border border-gray-100 cursor-pointer hover:border-gray-200 transition-all space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <User className="w-5 h-5 text-gray-300" />
+                                                    <div>
+                                                        <p className="font-bold text-sm text-gray-500">{lang === 'ar' ? 'الفريق الطبي' : 'Medical Team'}</p>
+                                                        <p className="text-[10px] text-gray-300">{new Date(app.scheduled_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US')}</p>
+                                                    </div>
+                                                </div>
+                                                <span className={`px-3 py-1 rounded-full text-[10px] font-black ${status.bg} ${status.text}`}>{status.label}</span>
+                                            </div>
+                                            {isExpanded && (
+                                                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-3 pt-2 border-t border-gray-100">
+                                                    <div className="grid grid-cols-2 gap-2">
+                                                        <div className="bg-gray-50 p-3 rounded-xl flex items-center gap-2">
+                                                            <CalendarIcon className="w-4 h-4 text-gray-400" />
+                                                            <span className="text-xs font-bold text-gray-600">
+                                                                {new Date(app.scheduled_at).toLocaleDateString(lang === 'ar' ? 'ar-EG' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}
+                                                            </span>
+                                                        </div>
+                                                        <div className="bg-gray-50 p-3 rounded-xl flex items-center gap-2">
+                                                            <Clock className="w-4 h-4 text-gray-400" />
+                                                            <span className="text-xs font-bold text-gray-600">
+                                                                {new Date(app.scheduled_at).toLocaleTimeString(lang === 'ar' ? 'ar-EG' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl">
+                                                        <TypeIcon className="w-4 h-4 text-gray-400" />
+                                                        <span className="text-xs font-bold text-gray-600">{typeLabels[app.appointment_type] || typeLabels.video}</span>
+                                                        <span className="text-gray-300">|</span>
+                                                        <Clock className="w-3.5 h-3.5 text-gray-400" />
+                                                        <span className="text-xs font-bold text-gray-600">{app.duration_minutes || 30} {lang === 'ar' ? 'دقيقة' : 'min'}</span>
+                                                    </div>
+                                                    {app.notes && (
+                                                        <div className="bg-amber-50 p-3 rounded-xl flex items-start gap-2">
+                                                            <FileText className="w-4 h-4 text-amber-400 mt-0.5 flex-shrink-0" />
+                                                            <p className="text-xs text-gray-600">{app.notes}</p>
+                                                        </div>
+                                                    )}
+                                                    <button onClick={(e) => { e.stopPropagation(); setBookingForm(f => ({ ...f, appointment_type: app.appointment_type, duration_minutes: app.duration_minutes || 30, notes: app.notes || '' })); setShowBooking(true); }}
+                                                        className="w-full py-3 bg-primary-emerald/10 text-primary-emerald font-bold text-xs rounded-xl flex items-center justify-center gap-2 active:scale-95 transition">
+                                                        <Plus className="w-4 h-4" />
+                                                        {lang === 'ar' ? 'حجز موعد مشابه' : 'Book Similar Appointment'}
+                                                    </button>
+                                                </motion.div>
+                                            )}
+                                        </motion.div>
+                                    );
+                                })
+                            )}
                         </div>
                     )}
 

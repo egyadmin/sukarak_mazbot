@@ -77,10 +77,10 @@ const FoodsView = () => {
 
     const classConfig = {
         'أطعمة مسموحة': { color: 'emerald', icon: Check, emoji: '✅', bg: 'from-emerald-500 to-green-600', lightBg: 'from-emerald-50 to-green-50', badge: 'bg-emerald-100 text-emerald-700', ring: 'ring-emerald-200', dot: 'bg-emerald-400' },
-        'أطعمة مسموحة بكميات قليلة': { color: 'amber', icon: AlertTriangle, emoji: '⚠️', bg: 'from-amber-500 to-orange-500', lightBg: 'from-amber-50 to-orange-50', badge: 'bg-amber-100 text-amber-700', ring: 'ring-amber-200', dot: 'bg-amber-400' },
         'أطعمة ممنوعة': { color: 'red', icon: X, emoji: '🚫', bg: 'from-red-500 to-rose-600', lightBg: 'from-red-50 to-rose-50', badge: 'bg-red-100 text-red-700', ring: 'ring-red-200', dot: 'bg-red-400' },
         'سناكات مسموحة': { color: 'teal', icon: Check, emoji: '🍿✅', bg: 'from-teal-500 to-cyan-600', lightBg: 'from-teal-50 to-cyan-50', badge: 'bg-teal-100 text-teal-700', ring: 'ring-teal-200', dot: 'bg-teal-400' },
         'سناكات ممنوعة': { color: 'rose', icon: X, emoji: '🍿🚫', bg: 'from-rose-500 to-pink-600', lightBg: 'from-rose-50 to-pink-50', badge: 'bg-rose-100 text-rose-700', ring: 'ring-rose-200', dot: 'bg-rose-400' },
+        'أطعمة مسموحة بكميات قليلة': { color: 'amber', icon: AlertTriangle, emoji: '⚠️', bg: 'from-amber-500 to-orange-500', lightBg: 'from-amber-50 to-orange-50', badge: 'bg-amber-100 text-amber-700', ring: 'ring-amber-200', dot: 'bg-amber-400' },
     };
 
     const categoryIcons = {
@@ -122,7 +122,7 @@ const FoodsView = () => {
                         <h2 className="text-2xl font-black text-primary-dark flex items-center gap-2">
                             <span className="text-2xl">🥗</span> دليل الأطعمة
                         </h2>
-                        <p className="text-[10px] text-gray-400 mt-0.5">ليلك الشامل للتغذية الصحية</p>
+                        <p className="text-[10px] text-gray-400 mt-0.5">دليلك الشامل للتغذية الصحية</p>
                     </div>
                 </div>
             </div>
@@ -223,18 +223,7 @@ const FoodsView = () => {
                                     placeholder="🔍 بحث عن طعام..." className="bg-transparent outline-none text-sm w-full placeholder:text-gray-300" />
                             </div>
 
-                            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
-                                <motion.button onClick={() => setActiveCategory('all')}
-                                    className={`whitespace-nowrap px-4 py-2 rounded-2xl font-bold text-xs ${activeCategory === 'all' ? 'bg-primary-dark text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
-                                    🛍️ الكل
-                                </motion.button>
-                                {classCategories.map(cat => (
-                                    <motion.button key={cat} onClick={() => setActiveCategory(cat)}
-                                        className={`whitespace-nowrap px-4 py-2 rounded-2xl font-bold text-xs ${activeCategory === cat ? 'bg-primary-dark text-white' : 'bg-white text-gray-400 border border-gray-100'}`}>
-                                        <span>{categoryIcons[cat] || '🍱'}</span> {cat}
-                                    </motion.button>
-                                ))}
-                            </div>
+
 
                             <div className="space-y-5">
                                 {Object.entries(grouped).map(([cat, items]) => (

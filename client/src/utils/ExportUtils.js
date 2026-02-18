@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ═══════════════════════════════════════════════════════════
  *  سُكّرك مظبوط - Professional Export Utilities v3.0
  *  Supports: PDF, Excel, Print, Tax Invoice with QR Code
@@ -985,11 +985,13 @@ export function exportDashboardReport(stats, reports, format, isRTL) {
  * Uses html2canvas for native Arabic support
  * ══════════════════════════════════════════
  */
-export async function exportHealthReport(readings, period, insight, lang = 'ar') {
+export async function exportHealthReport(readings, period, insight, lang = 'ar', extraData = {}) {
     const isRTL = lang === 'ar';
     const html2canvas = (await import('html2canvas')).default;
     const jsPDF = (await import('jspdf')).default;
-    
+
+    const { drugs = [], exercises = [], meals = [], insulin = [] } = extraData;
+
     const avg = readings.length > 0 ? Math.round(readings.reduce((s, r) => s + r.reading, 0) / readings.length) : 0;
     const maxR = readings.length > 0 ? Math.max(...readings.map(r => r.reading)) : 0;
     const minR = readings.length > 0 ? Math.min(...readings.map(r => r.reading)) : 0;
@@ -1003,17 +1005,29 @@ export async function exportHealthReport(readings, period, insight, lang = 'ar')
         avg <= 120 ? (isRTL ? 'ممتاز - في المعدل الطبيعي' : 'Excellent - Within Normal Range') :
             avg <= 180 ? (isRTL ? 'مرتفع قليلاً - يحتاج متابعة' : 'Slightly High - Needs Follow-up') :
                 (isRTL ? 'مرتفع - يجب مراجعة الطبيب فوراً' : 'High - Must Consult Doctor Immediately');
-    
+
     const statusColor = avg < 70 ? '#f59e0b' : avg <= 120 ? '#10b981' : avg <= 180 ? '#f59e0b' : '#ef4444';
 
-    const typeMap = isRTL ? 
+    const typeMap = isRTL ?
         { 'fasting': 'صائم', 'after_meal': 'بعد الأكل', 'random': 'عشوائي', 'before_meal': 'قبل الأكل' } :
         { 'fasting': 'Fasting', 'after_meal': 'After Meal', 'random': 'Random', 'before_meal': 'Before Meal' };
+
+    const mealTypeMap = isRTL ?
+        { 'breakfast': 'فطور', 'lunch': 'غداء', 'dinner': 'عشاء', 'snack': 'وجبة خفيفة' } :
+        { 'breakfast': 'Breakfast', 'lunch': 'Lunch', 'dinner': 'Dinner', 'snack': 'Snack' };
 
     const now = new Date();
     const dateStr = isRTL ? `${now.toLocaleDateString('ar-EG')} - ${now.toLocaleTimeString('ar-EG')}` : `${now.toLocaleDateString('en-US')} - ${now.toLocaleTimeString('en-US')}`;
 
-    // Build HTML
+    const totalExerciseMinutes = exercises.reduce((s, e) => s + (e.duration || 0), 0);
+    const totalCalories = meals.reduce((s, m) => s + (m.calories || 0), 0);
+    const totalInsulinUnits = insulin.reduce((s, i) => s + (i.reading || 0), 0);
+
+    // Build sections HTML
+    const sectionStyle = `margin-top:24px;border-top:2px solid #e2e8f0;padding-top:20px;`;
+    const sectionTitle = (emoji, text) => `<h3 style="font-size:16px;font-weight:900;color:#1e293b;margin:0 0 14px 0;">${emoji} ${text}</h3>`;
+
+    // Build comprehensive HTML
     const container = document.createElement('div');
     container.style.cssText = `position:fixed;left:-9999px;top:0;width:794px;background:#fff;font-family:Cairo,Tahoma,Arial,sans-serif;direction:${isRTL ? 'rtl' : 'ltr'};padding:0;`;
     container.innerHTML = `
@@ -1030,10 +1044,12 @@ export async function exportHealthReport(readings, period, insight, lang = 'ar')
             </div>
         </div>
         <div style="padding:24px 30px;">
-            <h2 style="font-size:20px;font-weight:900;color:#1e293b;margin:0 0 4px 0;">${isRTL ? '📋 تقرير متابعة السكر' : '📋 Sugar Monitoring Report'}</h2>
-            <p style="font-size:12px;color:#94a3b8;margin:0 0 20px 0;">${isRTL ? 'فترة التقرير' : 'Report Period'}: ${periodLabel} — ${readings.length} ${isRTL ? 'قراءة' : 'readings'}</p>
-            
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+            <h2 style="font-size:22px;font-weight:900;color:#1e293b;margin:0 0 4px 0;">${isRTL ? '📋 التقرير الصحي الشامل' : '📋 Comprehensive Health Report'}</h2>
+            <p style="font-size:12px;color:#94a3b8;margin:0 0 20px 0;">${isRTL ? 'فترة التقرير' : 'Report Period'}: ${periodLabel} — ${readings.length} ${isRTL ? 'قراءة سكر' : 'sugar readings'} | ${drugs.length} ${isRTL ? 'دواء' : 'medications'} | ${exercises.length} ${isRTL ? 'تمرين' : 'exercises'} | ${meals.length} ${isRTL ? 'وجبة' : 'meals'}</p>
+
+            <!-- ══════ SUGAR READINGS SECTION ══════ -->
+            ${sectionTitle('🩸', isRTL ? 'تقرير متابعة السكر' : 'Sugar Monitoring Report')}
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
                 <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:14px;text-align:center;">
                     <div style="font-size:28px;font-weight:900;color:#166f50;">${avg}</div>
                     <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'المتوسط (mg/dL)' : 'Average (mg/dL)'}</div>
@@ -1048,7 +1064,7 @@ export async function exportHealthReport(readings, period, insight, lang = 'ar')
                 </div>
             </div>
 
-            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;">
                 <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:12px;padding:12px;text-align:center;">
                     <div style="font-size:22px;font-weight:900;color:#10b981;">${normalPct}%</div>
                     <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'طبيعية' : 'Normal'} (${normalCount})</div>
@@ -1063,25 +1079,26 @@ export async function exportHealthReport(readings, period, insight, lang = 'ar')
                 </div>
             </div>
 
-            <div style="background:${statusColor};color:#fff;padding:12px 18px;border-radius:12px;font-weight:900;font-size:14px;margin-bottom:20px;text-align:center;">
+            <div style="background:${statusColor};color:#fff;padding:12px 18px;border-radius:12px;font-weight:900;font-size:14px;margin-bottom:16px;text-align:center;">
                 ${isRTL ? 'التقييم العام' : 'Overall Assessment'}: ${statusText}
             </div>
 
             ${insight ? `
-            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px;margin-bottom:20px;">
+            <div style="background:#f0fdf4;border:1px solid #86efac;border-radius:12px;padding:14px;margin-bottom:16px;">
                 <div style="font-size:13px;font-weight:900;color:#166f50;margin-bottom:6px;">🤖 ${isRTL ? 'تحليل الذكاء الاصطناعي' : 'AI Analysis'}</div>
                 <div style="font-size:11px;color:#475569;line-height:1.7;">${insight}</div>
             </div>` : ''}
 
-            <h3 style="font-size:14px;font-weight:900;color:#1e293b;margin:0 0 10px 0;">📊 ${isRTL ? 'سجل القراءات' : 'Readings Log'}</h3>
-            <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <!-- Sugar readings table -->
+            ${readings.length > 0 ? `
+            <table style="width:100%;border-collapse:collapse;font-size:11px;margin-bottom:8px;">
                 <thead>
                     <tr style="background:#166f50;color:#fff;">
-                        <th style="padding:10px 8px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;border-radius:${isRTL ? '8px 0 0 0' : '0 8px 0 0'};">#</th>
-                        <th style="padding:10px 8px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التاريخ والوقت' : 'Date & Time'}</th>
-                        <th style="padding:10px 8px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'نوع الفحص' : 'Test Type'}</th>
-                        <th style="padding:10px 8px;text-align:center;font-weight:700;">${isRTL ? 'القراءة' : 'Reading'}</th>
-                        <th style="padding:10px 8px;text-align:center;font-weight:700;border-radius:${isRTL ? '0 8px 0 0' : '8px 0 0 0'};">${isRTL ? 'الحالة' : 'Status'}</th>
+                        <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;border-radius:${isRTL ? '8px 0 0 0' : '0 8px 0 0'};">#</th>
+                        <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التاريخ والوقت' : 'Date & Time'}</th>
+                        <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'نوع الفحص' : 'Test Type'}</th>
+                        <th style="padding:8px 6px;text-align:center;font-weight:700;">${isRTL ? 'القراءة' : 'Reading'}</th>
+                        <th style="padding:8px 6px;text-align:center;font-weight:700;border-radius:${isRTL ? '0 8px 0 0' : '8px 0 0 0'};">${isRTL ? 'الحالة' : 'Status'}</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -1092,20 +1109,185 @@ export async function exportHealthReport(readings, period, insight, lang = 'ar')
         const dateS = r.created_at ? new Date(r.created_at).toLocaleString(isRTL ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
         const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
         return `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
-                            <td style="padding:9px 8px;font-weight:700;color:#94a3b8;">${i + 1}</td>
-                            <td style="padding:9px 8px;color:#475569;">${dateS}</td>
-                            <td style="padding:9px 8px;color:#475569;">${typeMap[r.test_type] || r.test_type || '--'}</td>
-                            <td style="padding:9px 8px;text-align:center;font-weight:900;color:#1e293b;font-size:13px;">${r.reading}</td>
-                            <td style="padding:9px 8px;text-align:center;"><span style="background:${stBg};color:${stColor};padding:3px 10px;border-radius:20px;font-weight:700;font-size:10px;">${st}</span></td>
+                            <td style="padding:7px 6px;font-weight:700;color:#94a3b8;">${i + 1}</td>
+                            <td style="padding:7px 6px;color:#475569;">${dateS}</td>
+                            <td style="padding:7px 6px;color:#475569;">${typeMap[r.test_type] || r.test_type || '--'}</td>
+                            <td style="padding:7px 6px;text-align:center;font-weight:900;color:#1e293b;font-size:13px;">${r.reading}</td>
+                            <td style="padding:7px 6px;text-align:center;"><span style="background:${stBg};color:${stColor};padding:2px 8px;border-radius:20px;font-weight:700;font-size:9px;">${st}</span></td>
                         </tr>`;
     }).join('')}
                 </tbody>
-            </table>
+            </table>` : `<p style="color:#94a3b8;font-size:12px;text-align:center;padding:16px;">${isRTL ? 'لا توجد قراءات سكر في هذه الفترة' : 'No sugar readings for this period'}</p>`}
+
+            <!-- ══════ MEDICATIONS SECTION ══════ -->
+            ${drugs.length > 0 ? `
+            <div style="${sectionStyle}">
+                ${sectionTitle('💊', isRTL ? 'الأدوية والعلاجات' : 'Medications & Treatments')}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#3b82f6;">${drugs.length}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'عدد الأدوية المسجلة' : 'Registered Medications'}</div>
+                    </div>
+                    <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#8b5cf6;">${insulin.length}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'جرعات الأنسولين' : 'Insulin Doses'}</div>
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="background:#3b82f6;color:#fff;">
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">#</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'الدواء' : 'Medication'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'الشكل' : 'Form'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التركيز' : 'Concentration'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'الجرعة' : 'Dosage'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التكرار' : 'Frequency'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${drugs.map((d, i) => {
+        const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+        return `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:7px 6px;font-weight:700;color:#94a3b8;">${i + 1}</td>
+                                <td style="padding:7px 6px;font-weight:700;color:#1e293b;">${d.name || '--'}</td>
+                                <td style="padding:7px 6px;color:#475569;">${d.form || '--'}</td>
+                                <td style="padding:7px 6px;color:#475569;">${d.concentration || '--'}</td>
+                                <td style="padding:7px 6px;color:#475569;">${d.serving || '--'}</td>
+                                <td style="padding:7px 6px;color:#3b82f6;font-weight:700;">${d.frequency || '--'}</td>
+                            </tr>`;
+    }).join('')}
+                    </tbody>
+                </table>
+            </div>` : ''}
+
+            <!-- ══════ INSULIN SECTION ══════ -->
+            ${insulin.length > 0 ? `
+            <div style="${sectionStyle}">
+                ${sectionTitle('💉', isRTL ? 'جرعات الأنسولين' : 'Insulin Doses')}
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:14px;">
+                    <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#8b5cf6;">${insulin.length}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'إجمالي الجرعات' : 'Total Doses'}</div>
+                    </div>
+                    <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#3b82f6;">${totalInsulinUnits}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'إجمالي الوحدات' : 'Total Units'}</div>
+                    </div>
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#166f50;">${insulin.length > 0 ? Math.round(totalInsulinUnits / insulin.length) : 0}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'متوسط الوحدات' : 'Avg Units'}</div>
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="background:#8b5cf6;color:#fff;">
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">#</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التاريخ والوقت' : 'Date & Time'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'النوع' : 'Type'}</th>
+                            <th style="padding:8px 6px;text-align:center;font-weight:700;">${isRTL ? 'الوحدات' : 'Units'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${insulin.map((r, i) => {
+        const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+        const dateS = r.created_at ? new Date(r.created_at).toLocaleString(isRTL ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '--';
+        return `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:7px 6px;font-weight:700;color:#94a3b8;">${i + 1}</td>
+                                <td style="padding:7px 6px;color:#475569;">${dateS}</td>
+                                <td style="padding:7px 6px;color:#475569;">${r.test_type || '--'}</td>
+                                <td style="padding:7px 6px;text-align:center;font-weight:900;color:#8b5cf6;font-size:13px;">${r.reading || '--'}</td>
+                            </tr>`;
+    }).join('')}
+                    </tbody>
+                </table>
+            </div>` : ''}
+
+            <!-- ══════ EXERCISE SECTION ══════ -->
+            ${exercises.length > 0 ? `
+            <div style="${sectionStyle}">
+                ${sectionTitle('🏃', isRTL ? 'النشاط البدني والرياضة' : 'Physical Activity & Exercise')}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                    <div style="background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#ea580c;">${exercises.length}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'عدد التمارين' : 'Total Exercises'}</div>
+                    </div>
+                    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#dc2626;">${totalExerciseMinutes}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'إجمالي الدقائق' : 'Total Minutes'}</div>
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="background:#ea580c;color:#fff;">
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">#</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التاريخ' : 'Date'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'نوع التمرين' : 'Exercise Type'}</th>
+                            <th style="padding:8px 6px;text-align:center;font-weight:700;">${isRTL ? 'المدة (دقيقة)' : 'Duration (min)'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${exercises.map((e, i) => {
+        const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+        const dateS = e.created_at ? new Date(e.created_at).toLocaleString(isRTL ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric' }) : '--';
+        return `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:7px 6px;font-weight:700;color:#94a3b8;">${i + 1}</td>
+                                <td style="padding:7px 6px;color:#475569;">${dateS}</td>
+                                <td style="padding:7px 6px;font-weight:700;color:#1e293b;">${e.type || '--'}</td>
+                                <td style="padding:7px 6px;text-align:center;font-weight:900;color:#ea580c;font-size:13px;">${e.duration || 0}</td>
+                            </tr>`;
+    }).join('')}
+                    </tbody>
+                </table>
+            </div>` : ''}
+
+            <!-- ══════ MEALS SECTION ══════ -->
+            ${meals.length > 0 ? `
+            <div style="${sectionStyle}">
+                ${sectionTitle('🍽️', isRTL ? 'الوجبات والتغذية' : 'Meals & Nutrition')}
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">
+                    <div style="background:#f5f3ff;border:1px solid #ddd6fe;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#7c3aed;">${meals.length}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'عدد الوجبات' : 'Total Meals'}</div>
+                    </div>
+                    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:12px;text-align:center;">
+                        <div style="font-size:22px;font-weight:900;color:#d97706;">${Math.round(totalCalories)}</div>
+                        <div style="font-size:10px;color:#6b7280;font-weight:700;">${isRTL ? 'إجمالي السعرات' : 'Total Calories'}</div>
+                    </div>
+                </div>
+                <table style="width:100%;border-collapse:collapse;font-size:11px;">
+                    <thead>
+                        <tr style="background:#7c3aed;color:#fff;">
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">#</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'التاريخ' : 'Date'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'النوع' : 'Type'}</th>
+                            <th style="padding:8px 6px;text-align:${isRTL ? 'right' : 'left'};font-weight:700;">${isRTL ? 'المحتوى' : 'Contents'}</th>
+                            <th style="padding:8px 6px;text-align:center;font-weight:700;">${isRTL ? 'السعرات' : 'Calories'}</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${meals.map((m, i) => {
+        const bg = i % 2 === 0 ? '#fff' : '#f8fafc';
+        const dateS = m.created_at ? new Date(m.created_at).toLocaleString(isRTL ? 'ar-EG' : 'en-US', { month: 'short', day: 'numeric' }) : '--';
+        let contents = '';
+        try { const parsed = JSON.parse(m.contents); contents = Array.isArray(parsed) ? parsed.join(', ') : m.contents || ''; } catch { contents = m.contents || ''; }
+        if (contents.length > 50) contents = contents.substring(0, 50) + '...';
+        return `<tr style="background:${bg};border-bottom:1px solid #f1f5f9;">
+                                <td style="padding:7px 6px;font-weight:700;color:#94a3b8;">${i + 1}</td>
+                                <td style="padding:7px 6px;color:#475569;">${dateS}</td>
+                                <td style="padding:7px 6px;font-weight:700;color:#7c3aed;">${mealTypeMap[m.type] || m.type || '--'}</td>
+                                <td style="padding:7px 6px;color:#475569;font-size:10px;">${contents}</td>
+                                <td style="padding:7px 6px;text-align:center;font-weight:900;color:#d97706;font-size:13px;">${Math.round(m.calories || 0)}</td>
+                            </tr>`;
+    }).join('')}
+                    </tbody>
+                </table>
+            </div>` : ''}
+
         </div>
         <div style="border-top:2px solid #10b981;padding:12px 30px;display:flex;justify-content:space-between;color:#94a3b8;font-size:9px;">
             <span>sukarak-mazboot.com</span>
             <span>© ${now.getFullYear()} ${isRTL ? 'سُكّرك مظبوط - جميع الحقوق محفوظة' : 'Sukarak Mazboot - All Rights Reserved'}</span>
-            <span>${isRTL ? 'صفحة 1' : 'Page 1'}</span>
+            <span>${isRTL ? 'التقرير الصحي الشامل' : 'Comprehensive Health Report'}</span>
         </div>
     `;
     document.body.appendChild(container);
@@ -1122,15 +1304,26 @@ export async function exportHealthReport(readings, period, insight, lang = 'ar')
         const imgWidth = 210; // A4 width in mm
         const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-        const doc = new jsPDF({
-            orientation: imgHeight > 297 ? 'portrait' : 'portrait',
-            unit: 'mm',
-            format: imgHeight > 297 ? [imgWidth, imgHeight + 10] : 'a4',
-        });
+        // Multi-page support
+        const pageHeight = 297; // A4 height
+        const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
 
-        doc.addImage(imgData, 'JPEG', 0, 0, imgWidth, imgHeight);
-        doc.save((isRTL ? 'تقرير_السكر_' : 'Sugar_Report_') + new Date().toISOString().split('T')[0] + '.pdf');
+        let heightLeft = imgHeight;
+        let position = 0;
+
+        doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+
+        while (heightLeft > 0) {
+            position -= pageHeight;
+            doc.addPage();
+            doc.addImage(imgData, 'JPEG', 0, position, imgWidth, imgHeight);
+            heightLeft -= pageHeight;
+        }
+
+        doc.save((isRTL ? 'التقرير_الصحي_الشامل_' : 'Comprehensive_Health_Report_') + new Date().toISOString().split('T')[0] + '.pdf');
     } finally {
         document.body.removeChild(container);
     }
 }
+

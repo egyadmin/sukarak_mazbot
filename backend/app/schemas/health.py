@@ -5,6 +5,7 @@ from typing import Optional, List
 class SugarReadingBase(BaseModel):
     reading: float
     test_type: str
+    unit: Optional[str] = 'mg/dl'
 
 class SugarReadingCreate(SugarReadingBase):
     measured_at: Optional[str] = None  # ISO datetime string
@@ -12,6 +13,7 @@ class SugarReadingCreate(SugarReadingBase):
 class SugarReadingResponse(SugarReadingBase):
     id: int
     user_id: int
+    unit: Optional[str] = 'mg/dl'
     created_at: datetime
 
     class Config:

@@ -2,13 +2,13 @@
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    ChevronLeft, ArrowRight, Activity, Pill, Utensils, Syringe,
+    ChevronLeft, ArrowRight, Activity, Pill, Utensils,
     Dumbbell, Calendar, TrendingUp, TrendingDown, Loader2, Filter
 } from 'lucide-react';
 import DataService from '../services/DataService';
 
 const typeLabels = {
-    fasting: 'صائم', after_meal: 'بعد الأكل', random: 'عشوائي', before_meal: 'قبل الأكل',
+    fasting: 'صائم', after_meal: 'بعد الأكل', random: 'عشوائي', before_meal: 'قبل الأكل', cumulative: 'تراكمي (HbA1c)',
 };
 const getTypeLabel = (key) => typeLabels[key] || key;
 
@@ -23,14 +23,13 @@ const HealthRecordView = () => {
     const [activeTab, setActiveTab] = useState('sugar');
     const [loading, setLoading] = useState(true);
     const [sugarData, setSugarData] = useState([]);
-    const [insulinData, setInsulinData] = useState([]);
+
     const [mealData, setMealData] = useState([]);
     const [exerciseData, setExerciseData] = useState([]);
     const [drugsData, setDrugsData] = useState([]);
 
     const tabs = [
         { key: 'sugar', label: 'السكر', icon: Activity, color: 'from-emerald-500 to-teal-500', emoji: '🩸' },
-        { key: 'insulin', label: 'الأنسولين', icon: Syringe, color: 'from-blue-500 to-indigo-500', emoji: '💉' },
         { key: 'meals', label: 'الوجبات', icon: Utensils, color: 'from-orange-400 to-amber-500', emoji: '🍽️' },
         { key: 'exercise', label: 'الرياضة', icon: Dumbbell, color: 'from-violet-500 to-purple-500', emoji: '🏃' },
         { key: 'drugs', label: 'الأدوية', icon: Pill, color: 'from-rose-500 to-pink-500', emoji: '💊' },
@@ -41,15 +40,13 @@ const HealthRecordView = () => {
     const loadAllData = async () => {
         setLoading(true);
         try {
-            const [sugar, insulin, meals, exercise, drugs] = await Promise.allSettled([
+            const [sugar, meals, exercise, drugs] = await Promise.allSettled([
                 DataService.getSugarReadings(),
-                DataService.getInsulinRecords(),
                 DataService.getMealRecords(),
                 DataService.getExerciseRecords(),
                 DataService.getDrugRecords(),
             ]);
             if (sugar.status === 'fulfilled') setSugarData(sugar.value.data || []);
-            if (insulin.status === 'fulfilled') setInsulinData(insulin.value.data || []);
             if (meals.status === 'fulfilled') setMealData(meals.value.data || []);
             if (exercise.status === 'fulfilled') setExerciseData(exercise.value.data || []);
             if (drugs.status === 'fulfilled') setDrugsData(drugs.value.data || []);
@@ -88,7 +85,7 @@ const HealthRecordView = () => {
         };
     }, [sugarData]);
 
-    const activeData = { sugar: sugarData, insulin: insulinData, meals: mealData, exercise: exerciseData, drugs: drugsData };
+    const activeData = { sugar: sugarData, meals: mealData, exercise: exerciseData, drugs: drugsData };
 
     return (
         <div className="space-y-5 pb-24">
@@ -161,7 +158,7 @@ const HealthRecordView = () => {
                         <motion.div key={r.id || i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
                             className={`p-3.5 rounded-xl border ${getSugarBg(r.reading)} flex items-center justify-between`}>
                             <div className="flex items-center gap-3">
-                                <div className={`text-2xl font-black ${getSugarColor(r.reading)}`}>{r.reading}</div>
+                                <div className={`text-2xl font-black ${getSugarColor(r.reading)}`}>{r.reading}<span className="text-xs font-bold text-gray-400 mr-1">{r.unit || 'mg/dL'}</span></div>
                                 <div>
                                     <p className="text-[10px] text-gray-400 font-bold">{getTypeLabel(r.test_type) || 'قراءة'}</p>
                                     <p className="text-[9px] text-gray-300">{formatDate(r.created_at)}</p>
@@ -176,28 +173,7 @@ const HealthRecordView = () => {
                 </div>
             )}
 
-            {!loading && activeTab === 'insulin' && insulinData.length > 0 && (
-                <div className="space-y-2">
-                    {insulinData.map((r, i) => (
-                        <motion.div key={r.id || i} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                            className="bg-blue-50 border border-blue-100 p-3.5 rounded-xl flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-                                    <Syringe className="w-5 h-5 text-blue-500" />
-                                </div>
-                                <div>
-                                    <p className="font-black text-sm text-gray-700">{r.insulin_type || 'أنسولين'}</p>
-                                    <p className="text-[9px] text-gray-400">{formatDate(r.created_at)}</p>
-                                </div>
-                            </div>
-                            <div className="text-right">
-                                <p className="font-black text-lg text-blue-600">{r.units}</p>
-                                <p className="text-[9px] text-gray-400">وحدة</p>
-                            </div>
-                        </motion.div>
-                    ))}
-                </div>
-            )}
+
 
             {!loading && activeTab === 'meals' && mealData.length > 0 && (
                 <div className="space-y-2">

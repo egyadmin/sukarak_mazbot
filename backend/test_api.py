@@ -1,34 +1,21 @@
-import requests
+import urllib.request, urllib.parse, json, sys, io
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
-# Test products via correct endpoint
-r = requests.get('http://localhost:8000/api/v1/market/products')
-data = r.json()
-print(f"Products: {len(data)}")
-for p in data[:5]:
-    print(f"  {p['title']} - price={p['price']} - img={p.get('image_url','none')}")
-
-# Test sugar API  
-r2 = requests.get('http://localhost:8000/api/v1/health/sugar')
-sugar = r2.json()
-print(f"\nSugar readings: {len(sugar)}")
-
-# Test profile
-r3 = requests.get('http://localhost:8000/api/v1/health/profile')
-profile = r3.json()
-print(f"Profile: {profile.get('name','?')} role={profile.get('role','?')}")
-
-# Test banners
-r4 = requests.get('http://localhost:8000/api/v1/admin/cms/banners')
-banners = r4.json()
-active = [b for b in banners if b['active']]
-print(f"\nBanners: {len(banners)} total, {len(active)} active")
-
-# Test appointments
-r5 = requests.get('http://localhost:8000/api/v1/health/appointments')
-print(f"Appointments: {r5.status_code} - {r5.text[:200]}")
-
-# Test orders
-r6 = requests.get('http://localhost:8000/api/v1/market/orders')
-print(f"Orders: {r6.status_code} - {r6.text[:200]}")
-
-print("\n=== ALL APIs OK ===")
+print("=== Login Test ===")
+try:
+    data = urllib.parse.urlencode({"username": "admin@sukarak.com", "password": "admin123"}).encode()
+    req = urllib.request.Request("http://localhost:8001/api/v1/auth/login", data=data,
+                                 headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+    r = urllib.request.urlopen(req)
+    result = json.loads(r.read())
+    user = result.get("user", {})
+    print(f"LOGIN SUCCESS!")
+    print(f"  Name: {user.get('name')}")
+    print(f"  Email: {user.get('email')}")
+    print(f"  Role: {user.get('role')}")
+    print(f"  Token: {result.get('access_token', '')[:30]}...")
+except urllib.error.HTTPError as e:
+    body = e.read().decode()
+    print(f"HTTP {e.code}: {body[:300]}")
+except Exception as e:
+    print(f"ERROR: {e}")
