@@ -1,0 +1,16 @@
+{
+    "site_package_search_strategy": "pep561",
+    "search_path": [
+        ".",
+        "C:\\Python314\\Lib\\site-packages"
+    ],
+    "source_directories": [
+        "."
+    ],
+    "exclude": [
+        "venv",
+        "__pycache__",
+        "media",
+        "uploads"
+    ]
+}
